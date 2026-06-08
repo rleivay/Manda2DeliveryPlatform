@@ -1,0 +1,36 @@
+﻿<div class="bottom-nav">
+    @if (Role == "Customer")
+    {
+        <NavLink class="nav-item" href="/customer/home" Match="NavLinkMatch.All">
+            <i class="m2-icon-home"></i>
+            <span>Inicio</span>
+        </NavLink>
+        <NavLink class="nav-item" href="/customer/orders">
+            <i class="m2-icon-orders"></i>
+            <span>Mis Pedidos</span>
+        </NavLink>
+        <NavLink class="nav-item" href="/auth/profile">
+            <i class="m2-icon-user"></i>
+            <span>Perfil</span>
+        </NavLink>
+    }
+    else if (Role == "Driver")
+    {
+        <NavLink class="nav-item" href="/driver/home" Match="NavLinkMatch.All">
+            <i class="m2-icon-radar"></i>
+            <span>Mapa</span>
+        </NavLink>
+        <NavLink class="nav-item" href="/driver/history">
+            <i class="m2-icon-history"></i>
+            <span>Mis Entregas</span>
+        </NavLink>
+        <NavLink class="nav-item" href="/auth/profile">
+            <i class="m2-icon-user"></i>
+            <span>Perfil</span>
+        </NavLink>
+    }
+</div>
+
+@code {
+    [Parameter] public string Role { get; set; } = "Customer";
+}

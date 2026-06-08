@@ -1,0 +1,580 @@
+﻿.login-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background-color: #F7F7F7;
+    padding: 24px 16px;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.brand-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.brand-logo {
+    font-size: 56px;
+    margin-bottom: 8px;
+}
+
+.brand-name {
+    font-size: 36px;
+    font-weight: 800;
+    color: #1A1A1A;
+    margin: 0;
+    letter-spacing: -1px;
+}
+
+.brand-accent {
+    color: #FF6B35;
+}
+
+.brand-tagline {
+    font-size: 14px;
+    color: #888;
+    margin: 4px 0 0;
+}
+
+.form-card {
+    background: #FFFFFF;
+    border-radius: 20px;
+    padding: 32px 24px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+.form-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1A1A1A;
+    margin: 0 0 24px;
+    text-align: center;
+}
+
+.alert-error {
+    background: #FFF0ED;
+    border: 1px solid #FF6B35;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #CC3300;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1.5px solid #E0E0E0;
+    border-radius: 12px;
+    font-size: 15px;
+    color: #1A1A1A;
+    background: #FAFAFA;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+    outline: none;
+}
+
+    .form-input:focus {
+        border-color: #FF6B35;
+        background: #FFFFFF;
+    }
+
+.input-password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+    .input-password-wrapper .form-input {
+        padding-right: 48px;
+    }
+
+.btn-toggle-password {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 16px;
+    background: #FF6B35;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 8px;
+}
+
+    .btn-primary:hover:not(:disabled) {
+        background: #E55A25;
+    }
+
+    .btn-primary:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    .btn-primary:disabled {
+        background: #FFAA88;
+        cursor: not-allowed;
+    }
+
+.form-divider {
+    text-align: center;
+    margin: 20px 0 12px;
+    font-size: 13px;
+    color: #999;
+}
+
+.btn-secondary {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    color: #FF6B35;
+    border: 2px solid #FF6B35;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .btn-secondary:hover {
+        background: #FFF0ED;
+    }
+
+
+.profile-container {
+    padding: 24px 16px;
+    max-width: 480px;
+    margin: 0 auto;
+    font-family: 'Segoe UI', sans-serif;
+    background: #F7F7F7;
+    min-height: 100vh;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #FFFFFF;
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.avatar-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #FF6B35;
+    color: #FFFFFF;
+    font-size: 22px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.profile-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1A1A1A;
+    margin: 0 0 6px;
+}
+
+.profile-role-badge {
+    background: #FFF0ED;
+    color: #FF6B35;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #FF6B35;
+}
+
+.section-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 16px;
+}
+
+.info-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid #F0F0F0;
+}
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+.info-icon {
+    font-size: 20px;
+    width: 28px;
+    text-align: center;
+}
+
+.info-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-label {
+    font-size: 11px;
+    color: #AAA;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.info-value {
+    font-size: 15px;
+    color: #1A1A1A;
+    font-weight: 500;
+}
+
+.section-danger {
+    border: 1px solid #FFE0D6;
+}
+
+.btn-logout {
+    width: 100%;
+    padding: 16px;
+    background: #FF3B30;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.2s, transform 0.1s;
+}
+
+    .btn-logout:hover:not(:disabled) {
+        background: #CC2D24;
+    }
+
+    .btn-logout:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    .btn-logout:disabled {
+        background: #FF9990;
+        cursor: not-allowed;
+    }
+
+.logout-hint {
+    font-size: 12px;
+    color: #AAA;
+    text-align: center;
+    margin: 12px 0 0;
+}
+
+.alert-error {
+    background: #FFF0ED;
+    border: 1px solid #FF6B35;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #CC3300;
+}
+
+/* ── Register ── */
+.register-container {
+    padding: 24px 16px;
+    max-width: 480px;
+    margin: 0 auto;
+    font-family: 'Segoe UI', sans-serif;
+    background: #F7F7F7;
+    min-height: 100vh;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.brand-logo-sm {
+    font-size: 28px;
+}
+
+.btn-back {
+    background: none;
+    border: none;
+    font-size: 15px;
+    color: #FF6B35;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0;
+}
+
+.form-subtitle {
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+    margin: -16px 0 20px;
+}
+
+.alert-success {
+    background: #F0FFF4;
+    border: 1px solid #38A169;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 14px;
+    color: #276749;
+    line-height: 1.6;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: #FF6B35;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    text-decoration: underline;
+    padding: 4px 0 0;
+}
+
+/* Bottom Navigation Styling */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background-color: #ffffff;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-top: 1px solid #eee;
+    z-index: 1000;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: #888;
+    font-size: 11px;
+}
+
+    .nav-item.active {
+        color: #e21247; /* Color PedidosYa */
+    }
+
+/* Espacio inferior para que el contenido no quede oculto por el menú */
+.manda2-main-content:not(.no-padding) {
+    padding-bottom: 80px;
+}
+
+
+/* ── Variables ──────────────────────────────────────────────── */
+:root {
+    --nav-height: 64px;
+}
+
+/* ── Shell autenticado ──────────────────────────────────────── */
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* ── Shell público (Login, Register) ────────────────────────── */
+.app-shell-public {
+    height: 100vh;
+    overflow-y: auto;
+}
+
+/* ── Contenido principal ─────────────────────────────────────── */
+.app-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    padding-bottom: var(--nav-height);
+    box-sizing: border-box;
+}
+
+.row {
+    --bs-gutter-x: 1rem;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* ════ BOTTOM NAV — Base ════════════════════════════════════════ */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--nav-height);
+    display: flex;
+    align-items: stretch;
+    z-index: 1000;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.15);
+}
+
+.nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    gap: 2px;
+    transition: background 0.2s, opacity 0.2s;
+    opacity: 0.65;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+    .nav-item.active {
+        opacity: 1;
+        font-weight: 700;
+    }
+
+.nav-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.nav-label {
+    font-size: 10px;
+    letter-spacing: 0.3px;
+}
+
+/* ════ TEMA CUSTOMER — Naranja / Blanco ═════════════════════════ */
+.theme-customer {
+    background-color: #f9f9f9;
+    color: #1a1a1a;
+}
+
+.nav-customer {
+    background-color: #ffffff;
+    border-top: 2px solid #FF6B00;
+}
+
+    .nav-customer .nav-item {
+        color: #888888;
+    }
+
+        .nav-customer .nav-item.active {
+            color: #FF6B00;
+            border-top: 3px solid #FF6B00;
+            margin-top: -2px;
+        }
+
+/* ════ TEMA DRIVER — Oscuro / Verde logística ═══════════════════ */
+.theme-driver {
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+}
+
+.nav-driver {
+    background-color: #16213e;
+    border-top: 2px solid #00C853;
+}
+
+    .nav-driver .nav-item {
+        color: #7a7a9a;
+    }
+
+        .nav-driver .nav-item.active {
+            color: #00C853;
+            border-top: 3px solid #00C853;
+            margin-top: -2px;
+        }
+
+/* ════ TEMA MERCHANT — Azul corporativo ════════════════════════ */
+.theme-merchant {
+    background-color: #f0f4ff;
+    color: #1a1a1a;
+}
+
+.nav-merchant {
+    background-color: #ffffff;
+    border-top: 2px solid #1565C0;
+}
+
+    .nav-merchant .nav-item {
+        color: #888888;
+    }
+
+        .nav-merchant .nav-item.active {
+            color: #1565C0;
+            border-top: 3px solid #1565C0;
+            margin-top: -2px;
+        }
+
+
+.merchant-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border-radius: 12px;
+    overflow: hidden;
+    background: white;
+    cursor: pointer;
+}
+
+    .merchant-card:active {
+        transform: scale(0.98);
+        box-shadow: none !important;
+    }
+
+.merchant-img {
+    height: 160px;
+    width: 100%;
+    object-fit: cover;
+}

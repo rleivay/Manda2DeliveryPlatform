@@ -1,0 +1,21 @@
+﻿@page "/test-map"
+
+<div class="coords-display">
+    <span>Lat: @_Lat.ToString("F6")</span>
+    <span>Lon: @_Lon.ToString("F6")</span>
+</div>
+
+<DeliveryMapComponent Latitude="@_Lat"
+                      Longitude="_Lon"
+                      OnLocationChanged="UpdateCoords" />
+
+@code {
+    double _Lat = 13.093765924724813;
+    double _Lon=-86.0006766303026;
+    string _Address = "Managua, Nicaragua";
+    private void UpdateCoords((double lat, double lon) coords)
+    {
+        _Lat = coords.lat;
+        _Lon= coords.lon;
+    }
+}

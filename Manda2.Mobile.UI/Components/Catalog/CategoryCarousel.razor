@@ -1,0 +1,79 @@
+﻿@using Manda2.Contracts.Catalog
+@inject NavigationManager NavigationManager
+
+@if (Categories != null && Categories.Any())
+{
+    <div class="category-carousel-wrapper">
+        <div class="category-carousel-scroll">
+            @foreach (var cat in Categories)
+            {
+                <div class="category-carousel-item" @onclick="() => OnCategoryClick(cat.Id)">
+                    <div class="category-icon-wrapper">
+                        @if (_iconCache.TryGetValue(cat.Id, out var iconSrc) && !string.IsNullOrEmpty(iconSrc))
+                        {
+                            <img src="@iconSrc" alt="@cat.Name" class="category-icon-img" />
+                        }
+                        else
+                        {
+                            <i class="bi bi-shop category-icon-default"></i>
+                        }
+                    </div>
+                    <span class="category-label">@cat.Name</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public List<MerchantCategoryDto> Categories { get; set; } = null!;
+
+    /// <summary>
+    /// Cache de íconos descargados: CategoryId → data:image/png;base64,...
+    /// Mismo patrón que MerchantCard.LoadLogoAsync para bypass SSL self-signed.
+    /// </summary>
+    private Dictionary<int, string?> _iconCache = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Categories == null) return;
+
+        foreach (var cat in Categories)
+        {
+            // Solo descarga si no está en cache
+            if (!_iconCache.ContainsKey(cat.Id))
+            {
+                _iconCache[cat.Id] = await LoadIconAsync(cat.IconUrl);
+            }
+        }
+    }
+
+    private async Task<string?> LoadIconAsync(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+
+        try
+        {
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            using var client = new HttpClient(handler);
+            var bytes = await client.GetByteArrayAsync(url);
+            return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void OnCategoryClick(int categoryId)
+    {
+        NavigationManager.NavigateTo($"/customer/merchants?categoryId={categoryId}");
+    }
+}

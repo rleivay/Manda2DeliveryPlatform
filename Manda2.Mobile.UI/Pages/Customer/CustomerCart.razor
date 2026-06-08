@@ -1,0 +1,254 @@
+﻿@page "/customer/cart"
+@using Manda2.Mobile.Services.Cart
+@using Manda2.Mobile.Services.Catalog
+@using Manda2.Contracts.Cart
+@using Manda2.Mobile.Services.Orders
+
+@inject ICartService CartService
+@inject IOrderGroupApiService OrderGroupApiService
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="cc-page">
+
+    @if (!CartService.Merchants.Any())
+    {
+        <!-- ── Estado vacío ── -->
+        <div class="cc-empty">
+            <i class="bi bi-cart-x"></i>
+            <h3>Tu carrito está vacío</h3>
+            <p>Agrega productos desde tus comercios favoritos.</p>
+            <button class="btn-primary" @onclick='() => Nav.NavigateTo("/customer/home")'>
+                Explorar comercios
+            </button>
+        </div>
+    }
+    else
+    {
+        <!-- ── Header ── -->
+        <div class="cc-header">
+            <button class="cc-back" @onclick='() => Nav.NavigateTo("/customer/home")'>
+                <i class="bi bi-arrow-left"></i>
+            </button>
+            <div>
+                <h2 class="cc-title">Tu pedido</h2>
+                <span class="cc-subtitle">
+                    @CartService.Merchants.Count comercio(s) · @CartService.TotalItemCount item(s)
+                </span>
+            </div>
+        </div>
+
+        <!-- ── Bloques por comercio ── -->
+        @foreach (var merchant in CartService.Merchants)
+        {
+            <div class="cc-merchant-block">
+
+                <!-- Header del comercio -->
+                <div class="cc-merchant-header">
+                    @if (!string.IsNullOrEmpty(merchant.LogoBase64))
+                    {
+                        <img src="@merchant.LogoBase64"
+                             class="cc-merchant-logo"
+                             alt="@merchant.MerchantName" />
+                    }
+                    else
+                    {
+                        <div class="cc-merchant-logo-placeholder">
+                            <i class="bi bi-shop"></i>
+                        </div>
+                    }
+                    <span class="cc-merchant-name">@merchant.MerchantName</span>
+                    <button class="cc-remove-merchant"
+                            @onclick="() => RemoveMerchant(merchant.MerchantId)"
+                            title="Quitar comercio">
+                        <i class="bi bi-x-circle"></i>
+                    </button>
+                </div>
+
+                <!-- Items del comercio -->
+                @foreach (var item in merchant.Items)
+                {
+                    <div class="cc-item">
+
+                        <!-- Imagen -->
+                        @if (!string.IsNullOrEmpty(item.ImageUrl))
+                        {
+                            <img src="@item.ImageBase64"
+                                 class="cc-item-img"
+                                 alt="@item.Name" />
+                        }
+                        else
+                        {
+                            <div class="cc-item-img-placeholder">🍽️</div>
+                        }
+
+                        <!-- Info -->
+                        <div class="cc-item-info">
+                            <span class="cc-item-name">@item.Name</span>
+                            @if (!string.IsNullOrEmpty(item.SpecialInstructions))
+                            {
+                                <span class="cc-item-note">📝 @item.SpecialInstructions</span>
+                            }
+                            <span class="cc-item-price">Q @item.UnitPrice.ToString("F2") c/u</span>
+                        </div>
+
+                        <!-- Controles de cantidad -->
+                        <div class="cc-qty">
+                            <button class="cc-qty-btn"
+                                    @onclick="() => DecreaseItem(merchant.MerchantId, item)">
+                                −
+                            </button>
+                            <span class="cc-qty-val">@item.Quantity</span>
+                            <button class="cc-qty-btn"
+                                    @onclick="() => IncreaseItem(merchant.MerchantId, item)">
+                                +
+                            </button>
+                        </div>
+
+                        <!-- Total de línea -->
+                        <span class="cc-item-total">
+                            Q @((item.UnitPrice * item.Quantity).ToString("F2"))
+                        </span>
+
+                    </div>
+                }
+
+                <!-- Subtotal del comercio -->
+                <div class="cc-merchant-subtotal">
+                    <span>Subtotal @merchant.MerchantName</span>
+                    <span>Q @merchant.SubTotal.ToString("F2")</span>
+                </div>
+
+            </div>
+        }
+
+        <!-- ── Resumen de totales ── -->
+        <div class="cc-totals">
+            <div class="cc-total-row">
+                <span>Subtotal productos</span>
+                <span>Q @CartService.GrandTotal.ToString("F2")</span>
+            </div>
+            <div class="cc-total-row cc-total-note">
+                <span>Envío y cargos de servicio</span>
+                <span>Se calculan al confirmar</span>
+            </div>
+        </div>
+
+        <!-- ── Error ── -->
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="cc-error">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                @_errorMessage
+            </div>
+        }
+
+        <!-- ── CTA ── -->
+        <div class="cc-cta">
+            <button class="btn-checkout"
+                    @onclick="ConfirmOrderAsync"
+                    disabled="@_isBusy">
+                @if (_isBusy)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    <span>Procesando...</span>
+                }
+                else
+                {
+                    <span>Confirmar pedido →</span>
+                }
+            </button>
+        </div>
+    }
+</div>
+
+@code{
+    private bool _isBusy = false;
+    private string? _errorMessage;
+
+    // ─── LIFECYCLE ────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        CartService.OnCartChanged += OnCartStateChanged;
+    }
+
+    public void Dispose()
+    {
+        CartService.OnCartChanged -= OnCartStateChanged;
+    }
+
+    private void OnCartStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ─── OPERACIONES DE CARRITO ───────────────────────────────────────
+
+    private void IncreaseItem(int merchantId, CartStateItem item)
+    {
+        // Agregar 1 unidad más del mismo producto
+        CartService.AddItem(
+            merchantId: merchantId,
+            merchantName: CartService.GetMerchantCart(merchantId)?.MerchantName ?? string.Empty,
+            logoBase64: CartService.GetMerchantCart(merchantId)?.LogoBase64,
+            item: new CartStateItem
+            {
+                ProductId = item.ProductId,
+                MerchantProductId = item.MerchantProductId,
+                Name = item.Name,
+                ImageUrl = item.ImageUrl,
+                UnitPrice = item.UnitPrice,
+                Quantity = 1,
+                SpecialInstructions = item.SpecialInstructions
+            });
+    }
+
+    private void DecreaseItem(int merchantId, CartStateItem item)
+    {
+        CartService.RemoveOneItem(merchantId, item.ProductId);
+    }
+
+    private void RemoveMerchant(int merchantId)
+    {
+        CartService.RemoveMerchant(merchantId);
+    }
+
+    // ─── CONFIRMAR PEDIDO ─────────────────────────────────────────────
+    /// <summary>
+    /// Construye el payload para CreateOrderGroup y llama al API.
+    /// En esta fase (MVP) la dirección de entrega es placeholder
+    /// hasta que se implemente el selector de dirección en Checkout.
+    /// </summary>
+    private async Task ConfirmOrderAsync()
+    {
+        if (_isBusy) return;
+        _isBusy = true;
+        _errorMessage = null;
+
+        try
+        {
+            var result = await OrderGroupApiService.CreateOrderGroupAsync(CartService.Merchants);
+
+            if (result.IsSuccess)
+            {
+                // Limpiar carrito en memoria
+                CartService.Clear();
+
+                // Navegar a Checkout con el OrderGroupId recién creado
+                Nav.NavigateTo($"/checkout/{result.OrderGroupId}");
+            }
+            else
+            {
+                _errorMessage = result.ErrorMessage ?? "No se pudo crear el pedido.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error al confirmar: {ex.Message}";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

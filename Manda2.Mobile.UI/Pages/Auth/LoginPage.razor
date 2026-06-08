@@ -1,0 +1,137 @@
+﻿@page "/auth/login"
+@using System.ComponentModel.DataAnnotations
+@using Manda2.Contracts.Auth
+@using Manda2.Mobile.Services.Auth
+@using Manda2.Mobile.Services.Session
+
+@inject IAuthService AuthService
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+<div class="login-container">
+    <div class="brand-header">
+        <div class="brand-logo">🛵</div>
+        <h1 class="brand-name">Manda<span class="brand-accent">2</span></h1>
+        <p class="brand-tagline">Tu delivery de confianza</p>
+    </div>
+
+    <div class="form-card">
+        <h2 class="form-title">Iniciar sesión</h2>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert-error">⚠️ @_errorMessage</div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label class="form-label">Correo electrónico</label>
+                <InputText class="form-input" @bind-Value="_model.Email" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <div class="input-password-wrapper">
+                    <InputText class="form-input"
+                               type="@(_showPassword ? "text" : "password")"
+                               @bind-Value="_model.Password" />
+                    <button type="button" class="btn-toggle-password" @onclick="TogglePassword">
+                        @(_showPassword ? "🙈" : "👁️")
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn-primary" type="submit" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span>⏳ Ingresando...</span>
+                }
+                else
+                {
+                    <span>Ingresar</span>
+                }
+            </button>
+        </EditForm>
+
+        <div class="form-divider">¿No tienes cuenta?</div>
+
+        <button class="btn-secondary" @onclick='() => Navigation.NavigateTo("/Auth/register")'>
+            Crear cuenta nueva
+        </button>
+    </div>
+</div>
+
+@code {
+    private bool _isLoading = false;
+    private bool _showPassword = false;
+    private string _errorMessage = string.Empty;
+
+    private readonly LoginModel _model = new();
+
+    private class LoginModel
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private async Task HandleLogin()
+    {
+        _errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_model.Email) || string.IsNullOrWhiteSpace(_model.Password))
+        {
+            _errorMessage = "Por favor completa todos los campos.";
+            return;
+        }
+
+        _isLoading = true;
+
+        try
+        {
+            var request = new LoginRequest
+            {
+                Email = _model.Email.Trim(),
+                Password = _model.Password
+            };
+
+            var result = await AuthService.LoginAsync(request);
+
+            if (result.Success)
+            {
+                await SessionService.SaveSessionAsync(result);
+
+                var destination = result.Role switch
+                {
+                    "Customer" => "/customer/select-address?returnUrl=%2Fcustomer%2Fhome",
+                    //"Customer" => "/test-map",
+                    "Driver" => "/driver/home",
+                    "Merchant" => "/merchant/home",
+                    _ => "/auth/login"
+                };
+
+                Navigation.NavigateTo(destination, forceLoad: false);
+            }
+            else
+            {
+                _errorMessage = result.Message ?? "Credenciales incorrectas.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void TogglePassword() => _showPassword = !_showPassword;
+}

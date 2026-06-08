@@ -1,0 +1,87 @@
+﻿@inject NavigationManager Navigation
+
+<nav class="bottom-nav @NavClass">
+    @foreach (var item in _navItems)
+    {
+        var isActive = IsActive(item.Href);
+        <div class="nav-item @(isActive ? "active" : "")"
+             @onclick="() => Navigate(item.Href)">
+            <span class="nav-icon">@item.Icon</span>
+            <span class="nav-label">@item.Label</span>
+        </div>
+    }
+</nav>
+
+@code {
+    /// <summary>
+    /// Rol del usuario. Recibido desde MainLayout.
+    /// Valores esperados: "Customer", "Driver", "Merchant".
+    /// </summary>
+    [Parameter]
+    public string Role { get; set; } = string.Empty;
+
+    // ── Clase CSS de la barra según el rol ────
+    private string NavClass => Role.ToLower() switch
+    {
+        "driver" => "nav-driver",
+        "merchant" => "nav-merchant",
+        _ => "nav-customer"
+    };
+
+    // ── Items de navegación según el rol ────
+    private List<NavItem> _navItems = new();
+
+    protected override void OnParametersSet()
+    {
+        _navItems = Role.ToLower() switch
+        {
+            "driver" => DriverNav(),
+            "merchant" => MerchantNav(),
+            _ => CustomerNav()
+        };
+    }
+
+    /// <summary>
+    /// Navega usando NavigationManager (SPA — sin reload).
+    /// Evita que el WebView2 recargue la página completa.
+    /// </summary>
+    private void Navigate(string href)
+    {
+        Navigation.NavigateTo(href);
+    }
+
+    /// <summary>Determina si el href coincide con la ruta actual.</summary>
+    private bool IsActive(string href)
+    {
+        var current = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        return current.Equals(href, StringComparison.OrdinalIgnoreCase)
+            || (href != "/" && current.StartsWith(href, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ── Definición de tabs por rol ────
+
+    private static List<NavItem> CustomerNav() => new()
+    {
+        new("🏠", "Inicio",    "/customer/home"),
+        new("📦", "Pedidos",   "/customer/orders"),
+        new("👤", "Perfil",    "/Auth/profile")
+    };
+
+    private static List<NavItem> DriverNav() => new()
+    {
+        new("🚀", "Inicio",    "/driver/home"),
+        new("🗺️", "En Ruta",   "/driver/active"),
+        new("📋", "Historial", "/driver/history"),
+        new("👤", "Perfil",    "/Auth/profile")
+    };
+
+    private static List<NavItem> MerchantNav() => new()
+    {
+        new("📊", "Dashboard", "/merchant/home"),
+        new("🛒", "Órdenes",   "/merchant/orders"),
+        new("👤", "Perfil",    "/Auth/profile")
+    };
+
+    // ── Record interno ────
+    private record NavItem(string Icon, string Label, string Href);
+}

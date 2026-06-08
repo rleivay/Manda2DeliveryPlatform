@@ -1,0 +1,66 @@
+﻿@using Manda2.Mobile.Services.Cart
+@inject NavigationManager Nav
+
+@if (CartService.TotalItemCount > 0 || ShowLimitWarning)
+{
+    <div class="cart-bar @(ShowLimitWarning && !MerchantIsInCart ? "cart-bar--limit" : "")">
+
+        @if (ShowLimitWarning && !MerchantIsInCart)
+        {
+            @* Estado: límite alcanzado, este comercio NO está en el carrito *@
+            <div class="cart-bar__limit-content">
+                <i class="bi bi-exclamation-triangle-fill cart-bar__limit-icon"></i>
+                <div class="cart-bar__limit-text">
+                    <span class="cart-bar__limit-title">
+                        Límite alcanzado
+                        (@CartService.Merchants.Count/@CartService.MerchantLimit comercios)
+                    </span>
+                    <span class="cart-bar__limit-sub">Finaliza tu pedido o quita un comercio</span>
+                </div>
+                <button class="cart-bar__btn-view" @onclick="GoToCart">
+                    Ver pedido
+                </button>
+            </div>
+        }
+        else if (CartService.TotalItemCount > 0)
+        {
+            @* Estado normal o límite alcanzado pero este comercio SÍ está en el carrito *@
+            <div class="cart-bar__normal-content" @onclick="GoToCart">
+                <div class="cart-bar__left">
+                    <span class="cart-bar__badge">@CartService.TotalItemCount</span>
+                    <span class="cart-bar__label">Ver pedido</span>
+                    @if (MerchantIsInCart)
+                    {
+                        <span class="cart-bar__merchant-check">
+                            <i class="bi bi-check-circle-fill"></i> Este comercio
+                        </span>
+                    }
+                </div>
+                <span class="cart-bar__total">C$ @CartService.GrandTotal.ToString("F2")</span>
+            </div>
+        }
+
+    </div>
+}
+
+
+@code {
+    /// <summary>Servicio de carrito inyectado desde el padre vía parámetro o cascading.</summary>
+    [Parameter]
+    [EditorRequired]
+    public ICartService CartService { get; set; } = null!;
+
+    /// <summary>True si el comercio actual ya está en el carrito.</summary>
+    [Parameter]
+    public bool MerchantIsInCart { get; set; }
+
+    /// <summary>
+    /// True cuando el carrito está en el límite de comercios.
+    /// El padre calcula este valor.
+    /// </summary>
+    [Parameter]
+    public bool ShowLimitWarning { get; set; }
+
+    private void GoToCart()
+        => Nav.NavigateTo("/customer/cart");
+}

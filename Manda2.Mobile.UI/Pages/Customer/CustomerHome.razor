@@ -1,0 +1,145 @@
+﻿@page "/customer/home"
+@using Manda2.Mobile.Services.Catalog
+@using Manda2.Contracts.Catalog
+@using Manda2.Mobile.UI.Components.Catalog
+@inject ICatalogService CatalogService
+@inject NavigationManager NavigationManager
+
+<div class="customer-home-wrapper">
+
+   @*  {{!-- ── HERO ── --}} *@
+    <div class="home-hero">
+        <div class="hero-address">
+            <i class="bi bi-geo-alt-fill"></i>
+            <span class="hero-address-text">Mi ubicación</span>
+            <i class="bi bi-chevron-down ms-1 small"></i>
+        </div>
+        <div class="hero-search">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text"
+                   class="search-input"
+                   placeholder="Buscar comercios o productos..."
+                   value="@_searchTerm"
+                   @oninput="OnSearchInput" />
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="loading-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* { { !-- ── CAROUSEL 1: Categorías(cfg.MerchantCategories) ── --} } *@
+        @if (_categories.Any())
+        {
+            <CategoryCarousel Categories="_categories" />
+        }
+
+        @* { { !-- ── CAROUSEL 2: Comercios destacados(core.Merchants abiertos) ── --} } *@
+        @if (_openMerchants.Any())
+        {
+            <MerchantCarousel Title="Abiertos ahora"
+                              Merchants="_openMerchants" />
+        }
+
+       @*  { { !-- ── SECCIÓN: Todos los comercios con filtro ── --} } *@
+        <div class="section-header">
+            <span class="section-title">Explorar</span>
+        </div>
+
+        @if (_filteredMerchants.Any())
+        {
+            <div class="merchants-grid">
+                @foreach (var merchant in _filteredMerchants)
+                {
+                    <MerchantCard Merchant="merchant"
+                                  OnClick="() => NavigateToMerchant(merchant.MerchantId)" />
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <i class="bi bi-shop-window"></i>
+                <p>No hay comercios disponibles.</p>
+                <button class="btn btn-outline-primary btn-sm" @onclick="LoadDataAsync">
+                    Reintentar
+                </button>
+            </div>
+        }
+    }
+
+</div>
+
+
+@code {
+    private List<MerchantCategoryDto> _categories = new();
+    private List<MerchantSummaryDto> _merchants = new();
+    private List<MerchantSummaryDto> _openMerchants = new();
+    private List<MerchantSummaryDto> _filteredMerchants = new();
+    private bool _isLoading = true;
+    private string _searchTerm = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _isLoading = true;
+
+            // Carga paralela: categorías + comercios
+            var categoriesTask = CatalogService.GetMerchantCategoriesAsync();
+            var merchantsTask = CatalogService.GetOpenMerchantsAsync();
+
+            await Task.WhenAll(categoriesTask, merchantsTask);
+
+            _categories = categoriesTask.Result;
+            _merchants = merchantsTask.Result;
+            _openMerchants = _merchants.Where(m => m.IsOpen).Take(10).ToList();
+            _filteredMerchants = _merchants.ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CustomerHome] Error: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? string.Empty;
+        ApplySearch();
+    }
+
+    private void ApplySearch()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredMerchants = _merchants.ToList();
+            return;
+        }
+
+        _filteredMerchants = _merchants
+            .Where(m =>
+                m.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (m.CategoryName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+    }
+
+    private void NavigateToMerchant(int merchantId)
+    {
+        NavigationManager.NavigateTo($"/merchant/{merchantId}");
+    }
+}

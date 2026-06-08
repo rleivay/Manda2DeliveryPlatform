@@ -1,0 +1,377 @@
+﻿@page "/merchant/{MerchantId:int}"
+@using Manda2.Mobile.Services.Catalog
+@using Manda2.Mobile.Services.Cart
+@using Manda2.Contracts.Catalog
+@using Manda2.Mobile.UI.Components.Catalog
+@inject ICatalogService CatalogService
+@inject ICartService CartService
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
+
+@implements IDisposable
+
+<div class="md-page">
+
+    @if (_loading)
+    {
+        <div class="md-loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    }
+    else if (_merchant == null)
+    {
+        <div class="md-not-found">
+            <i class="bi bi-shop-window"></i>
+            <p>Comercio no encontrado.</p>
+            <button class="btn btn-outline-primary btn-sm"
+                    @onclick='() => Nav.NavigateTo("/customer/home")'>
+                Volver al inicio
+            </button>
+        </div>
+    }
+    else
+    {
+        @* ── BANNER DE ADVERTENCIA TEMPRANA (Idea A) ── *@
+        @if (_showEarlyWarning)
+        {
+            <div class="md-banner md-banner--warning">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>
+                    Estás agregando tu último comercio permitido
+                    (@CartService.Merchants.Count de @CartService.MerchantLimit).
+                    Finaliza este pedido para agregar más.
+                </span>
+            </div>
+        }
+        else if (_showLimitBanner)
+        {
+            <div class="md-banner md-banner--danger">
+                <i class="bi bi-slash-circle-fill"></i>
+                <span>
+                    Límite de comercios alcanzado
+                    (@CartService.MerchantLimit/@CartService.MerchantLimit).
+                    Finaliza tu pedido actual o quita un comercio.
+                </span>
+            </div>
+        }
+
+        @* ── HERO ── *@
+        <div class="md-hero">
+            <div class="md-hero__bg"
+                 style="background-image: url('@(_logoBase64 ?? "https://placehold.co/800x300?text=Comercio")');">
+            </div>
+            <div class="md-hero__overlay"></div>
+
+            <button class="md-hero__back" @onclick='() => Nav.NavigateTo("/customer/home")'>
+                <i class="bi bi-arrow-left"></i>
+            </button>
+
+            <div class="md-hero__logo-wrapper">
+                <img src="@(_logoBase64 ?? "https://placehold.co/100x100?text=Logo")"
+                     class="md-hero__logo"
+                     alt="@_merchant.Name" />
+            </div>
+        </div>
+
+        @* ── INFO DEL COMERCIO ── *@
+        <div class="md-info">
+            <div class="md-info__header">
+                <div>
+                    <h2 class="md-info__name">@_merchant.Name</h2>
+                    <p class="md-info__category">@_merchant.CategoryName</p>
+                    @if (!string.IsNullOrEmpty(_merchant.AddressText))
+                    {
+                        <p class="md-info__address">
+                            <i class="bi bi-geo-alt"></i> @_merchant.AddressText
+                        </p>
+                    }
+                </div>
+                <span class="@(_merchant.IsOpen ? "md-badge--open" : "md-badge--closed")">
+                    @(_merchant.IsOpen ? "Abierto" : "Cerrado")
+                </span>
+            </div>
+
+            @* Stats — rating y ETA son placeholders visuales hasta que exista contrato *@
+            <div class="md-info__stats">
+                <div class="md-stat">
+                    <i class="bi bi-star-fill text-warning"></i>
+                    <span>4.5</span>
+                    @* TODO: pendiente de contrato — no es dato de negocio *@
+                </div>
+                <div class="md-stat-divider"></div>
+                <div class="md-stat">
+                    <i class="bi bi-clock text-muted"></i>
+                    <span>25-35 min</span>
+                    @* TODO: pendiente de contrato *@
+                </div>
+                <div class="md-stat-divider"></div>
+                <div class="md-stat">
+                    <i class="bi bi-bicycle text-success"></i>
+                    <span class="text-success fw-bold">Envío Gratis</span>
+                    @* TODO: pendiente de contrato *@
+                </div>
+            </div>
+        </div>
+
+        @* ── PRODUCTOS ── *@
+        <div class="md-products">
+
+            @if (_loadingProducts)
+            {
+                <div class="md-products__loading">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <p>Cargando menú...</p>
+                </div>
+            }
+            else if (!_groupedProducts.Any())
+            {
+                <div class="md-products__empty">
+                    <i class="bi bi-bag-x"></i>
+                    <p>No hay productos disponibles.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var group in _groupedProducts)
+                {
+                    <div class="md-category-section">
+                        <h3 class="md-category-title">@group.Key</h3>
+
+                        @foreach (var product in group.Value)
+                        {
+                            <MerchantProductCard Product="product"
+                                                 CurrentQuantity="CartService.GetItemQuantity(MerchantId, product.ProductId)"
+                                                 CurrentNote="@GetCurrentNote(product.ProductId)"
+                                                 IsAddDisabled="@IsAddDisabledFor()"
+                                                 OnAdd="HandleAddProduct"
+                                                 OnRemove="HandleRemoveProduct"
+                                                 OnNoteChanged="HandleNoteChanged" />
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        @if (_showLimitToast)
+        {
+            <div class="md-toast md-toast--limit">
+                <i class="bi bi-slash-circle-fill"></i>
+                Límite de comercios alcanzado. Finaliza tu pedido actual.
+            </div>
+        }
+
+        @* ── CART BAR (Idea D) ── *@
+        <MerchantCartBar CartService="CartService"
+                         MerchantIsInCart="CartService.HasMerchant(MerchantId)"
+                         ShowLimitWarning="CartService.IsAtMerchantLimit && !CartService.HasMerchant(MerchantId)" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int MerchantId { get; set; }
+
+    // ── Estado ────────────────────────────────────────────────────────────
+    private MerchantSummaryDto? _merchant;
+    private Dictionary<string, List<MerchantProductDto>> _groupedProducts = new();
+    private bool _loading = true;
+    private bool _loadingProducts = false;
+    private string? _logoBase64;
+
+    // ── Banners de límite ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// True cuando el carrito está en el penúltimo slot
+    /// Y este comercio NO está en el carrito todavía.
+    /// Idea A: advertencia temprana.
+    /// </summary>
+    private bool _showEarlyWarning =>
+        !CartService.HasMerchant(MerchantId) &&
+        CartService.Merchants.Count == CartService.MerchantLimit - 1 &&
+        CartService.MerchantLimit > 1;
+
+    /// <summary>
+    /// True cuando el carrito ya alcanzó el límite
+    /// Y este comercio NO está en el carrito.
+    /// Idea A: banner rojo bloqueante.
+    /// </summary>
+    private bool _showLimitBanner =>
+        CartService.IsAtMerchantLimit &&
+        !CartService.HasMerchant(MerchantId);
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        CartService.OnCartChanged += OnCartStateChanged;
+        await LoadMerchantAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Si navegaron a otro merchant sin destruir el componente
+        if (_merchant?.MerchantId != MerchantId)
+        {
+            _merchant = null;
+            _groupedProducts = new();
+            _logoBase64 = null;
+            await LoadMerchantAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        CartService.OnCartChanged -= OnCartStateChanged;
+    }
+
+    private void OnCartStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ── Carga de datos ────────────────────────────────────────────────────
+
+    private async Task LoadMerchantAsync()
+    {
+        try
+        {
+            _loading = true;
+            StateHasChanged();
+
+            // Cargar lista de merchants para obtener el summary del comercio actual
+            // (reutiliza el endpoint existente — no se inventa endpoint nuevo)
+            var merchants = await CatalogService.GetMerchantsByCategoryAsync(null);
+            _merchant = merchants.FirstOrDefault(m => m.MerchantId == MerchantId);
+
+            if (_merchant != null)
+            {
+                // Cargar logo en paralelo con productos
+                var logoTask = LoadLogoAsync(_merchant.LogoUrl);
+                var productsTask = LoadProductsAsync();
+                await Task.WhenAll(logoTask, productsTask);
+                _logoBase64 = logoTask.Result;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MerchantDetail] Error cargando comercio {MerchantId}: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        try
+        {
+            _loadingProducts = true;
+            var products = await CatalogService.GetMerchantProductsAsync(MerchantId);
+
+            // Agrupar por CategoryName para el menú por secciones
+            _groupedProducts = products
+                .GroupBy(p => p.CategoryName ?? "General")
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MerchantDetail] Error cargando productos: {ex.Message}");
+        }
+        finally
+        {
+            _loadingProducts = false;
+        }
+    }
+
+    private async Task<string?> LoadLogoAsync(string? url)
+    {
+        // url ya llega absoluta desde CatalogService.FormatImageUrl
+        if (string.IsNullOrWhiteSpace(url)) return null;
+
+        try
+        {
+            // Reutiliza el cliente registrado — no crea HttpClient nuevo
+            var client = HttpClientFactory.CreateClient("ImageClient");
+            var bytes = await client.GetByteArrayAsync(url);
+
+            // Detectar tipo MIME básico por extensión
+            var mime = url.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png"
+                     : url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ? "image/webp"
+                     : "image/jpeg";
+
+            return $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MerchantDetail] Error cargando logo: {ex.Message}");
+            return null;
+        }
+    }
+
+    // ── Lógica de carrito ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// True si el botón "Agregar" debe estar deshabilitado para este comercio.
+    /// Se deshabilita cuando el carrito está en el límite Y este comercio no está en él.
+    /// </summary>
+    private bool IsAddDisabledFor()
+        => CartService.IsAtMerchantLimit && !CartService.HasMerchant(MerchantId);
+    private bool _showLimitToast = false;
+
+    private async Task HandleAddProduct(MerchantProductDto product)
+    {
+        // Descargar imagen del producto como Base64 (mismo patrón que LoadLogoAsync)
+        var imageBase64 = await LoadLogoAsync(product.ImageUrl);
+
+        var item = new CartStateItem
+        {
+            ProductId = product.ProductId,
+            MerchantProductId = product.MerchantProductId,
+            Name = product.Name,
+            ImageUrl = product.ImageUrl,      // reservado para futuro
+            ImageBase64 = imageBase64,            // ← para display en CartPage
+            UnitPrice = product.SalePrice,
+            Quantity = 1,
+            SpecialInstructions = null
+        };
+
+        var result = CartService.AddItem(
+            merchantId: MerchantId,
+            merchantName: _merchant?.Name ?? string.Empty,
+            logoBase64: _logoBase64,
+            item: item);
+
+        if (result == AddToCartResult.MerchantLimitReached)
+        {
+            _showLimitToast = true;
+            InvokeAsync(StateHasChanged);
+
+            _ = Task.Delay(3000).ContinueWith(_ =>
+            {
+                _showLimitToast = false;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+    }
+
+    private void HandleRemoveProduct(MerchantProductDto product)
+    {
+        CartService.RemoveOneItem(MerchantId, product.ProductId);
+    }
+
+    private void HandleNoteChanged((MerchantProductDto Product, string? Note) args)
+    {
+        CartService.UpdateItemNote(MerchantId, args.Product.ProductId, args.Note);
+    }
+
+    private string? GetCurrentNote(int productId)
+    {
+        return CartService
+            .GetMerchantCart(MerchantId)
+            ?.Items.FirstOrDefault(i => i.ProductId == productId)
+            ?.SpecialInstructions;
+    }
+}

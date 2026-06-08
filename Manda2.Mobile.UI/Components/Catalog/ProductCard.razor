@@ -1,0 +1,80 @@
+﻿@using Manda2.Contracts.Catalog
+@inject IHttpClientFactory HttpClientFactory
+
+<div class="product-card card h-100 shadow-sm border-0">
+    <div class="row g-0 align-items-center">
+
+        <!-- Imagen del producto -->
+        <div class="col-4">
+            <img src="@(_imageSrc ?? $"https://placehold.co/120x120?text={Uri.EscapeDataString(Product.Name)}")"
+                 class="product-img rounded-start"
+                 alt="@Product.Name" />
+        </div>
+
+        <!-- Info del producto -->
+        <div class="col-8">
+            <div class="card-body py-2 px-3">
+                <h6 class="card-title mb-1 fw-semibold">@Product.Name</h6>
+
+                @if (!string.IsNullOrEmpty(Product.Description))
+                {
+                    <p class="card-text text-muted small mb-1 product-desc">@Product.Description</p>
+                }
+
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="fw-bold text-primary">Q @Product.SalePrice.ToString("F2")</span>
+
+                    @if (Product.IsAvailable)
+                    {
+                        <button class="btn btn-sm btn-primary rounded-pill"
+                                @onclick="() => OnAddToCart.InvokeAsync(Product)">
+                            <i class="bi bi-plus"></i> Agregar
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">No disponible</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Producto a mostrar.</summary>
+    [Parameter, EditorRequired] public MerchantProductDto Product { get; set; } = default!;
+
+    /// <summary>Evento disparado al presionar "Agregar".</summary>
+    [Parameter] public EventCallback<MerchantProductDto> OnAddToCart { get; set; }
+
+    // ── Estado interno ────────────────────────────────────────────────────
+    private string? _imageSrc;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var url = Product.ImageUrl;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _imageSrc = null;
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ImageClient");
+            var bytes = await client.GetByteArrayAsync(url);
+
+            var mime = url.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png"
+                     : url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ? "image/webp"
+                     : "image/jpeg";
+
+            _imageSrc = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ProductCard] Error imagen {Product.ProductId}: {ex.Message}");
+            _imageSrc = null;
+        }
+    }
+}

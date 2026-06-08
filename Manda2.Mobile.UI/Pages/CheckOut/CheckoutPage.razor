@@ -1,0 +1,341 @@
+﻿@page "/checkout/{OrderGroupId:int}"
+@using Manda2.Mobile.Services.Session
+@using Manda2.Mobile.Services.ShippingAddress
+@using Manda2.Mobile.Services.CheckOut
+@using Manda2.Contracts.CheckOut
+@using Manda2.Contracts.Customer
+
+@inject ISessionService Session
+@inject IShippingAddressApiService ShippingService
+@inject IPaymentMethodApiService PaymentService
+@inject ICheckoutApiService CheckoutService
+@inject NavigationManager Navigation
+
+<div class="checkout-page">
+
+    <!-- HEADER -->
+    <div class="checkout-header">
+        <button class="btn-back" @onclick='() => Navigation.NavigateTo("/customer/cart")'>
+            ←
+        </button>
+        <h2 class="checkout-title">Finalizar Pedido</h2>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="checkout-loading">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p>Calculando envío...</p>
+        </div>
+    }
+    else
+    {
+        <!-- SECCIÓN 1: DIRECCIÓN DE ENTREGA -->
+        <div class="checkout-section">
+            <div class="section-label">📍 Dirección de entrega</div>
+
+            @if (!string.IsNullOrEmpty(_selectedAddressText))
+            {
+                <div class="address-display">
+                    <span class="address-text">@_selectedAddressText</span>
+                    <button class="btn-change" @onclick="ChangeAddress">
+                        Cambiar
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="address-empty">
+                    <span>No hay dirección seleccionada.</span>
+                    <button class="btn-change" @onclick="ChangeAddress">
+                        Seleccionar
+                    </button>
+                </div>
+            }
+        </div>
+
+        <!-- SECCIÓN 2: RESUMEN DE TOTALES (solo si logística confirmada) -->
+        @if (_logisticsConfirmed && _summary != null)
+        {
+            <div class="checkout-section checkout-summary">
+                <div class="section-label">🧾 Resumen</div>
+
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span>Q @_summary.SubTotal.ToString("F2")</span>
+                </div>
+                <div class="summary-row">
+                    <span>Delivery</span>
+                    <span>Q @_summary.DeliveryFee.ToString("F2")</span>
+                </div>
+                <div class="summary-row">
+                    <span>Tarifa de servicio</span>
+                    <span>Q @_summary.ServiceFee.ToString("F2")</span>
+                </div>
+                <div class="summary-row summary-total">
+                    <span>TOTAL</span>
+                    <span>Q @_summary.TotalAmount.ToString("F2")</span>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 3: MÉTODO DE PAGO -->
+            <div class="checkout-section">
+                <div class="section-label">💳 Método de pago</div>
+
+                <div class="payment-methods">
+                    @foreach (var pm in _paymentMethods)
+                    {
+                        <button class="payment-btn @(_selectedPaymentMethod?.Id == pm.Id ? "active" : "")"
+                                @onclick="() => SelectPaymentMethod(pm)">
+                            @GetPaymentIcon(pm.Name) @pm.Name
+                        </button>
+                    }
+                </div>
+
+                @if (_selectedPaymentMethod?.RequiresReference == true)
+                {
+                    <div class="reference-field">
+                        <label>Número de referencia</label>
+                        <input type="text"
+                               class="form-input"
+                               placeholder="Ej: 123456789"
+                               @bind="_referenceNumber" />
+                    </div>
+                }
+            </div>
+
+            <!-- BOTÓN PAGAR -->
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="checkout-error">⚠️ @_errorMessage</div>
+            }
+
+            <button class="btn-pay @(!_canPay ? "disabled" : "")"
+                    @onclick="ProcessOrder"
+                    disabled="@(!_canPay)">
+                @if (_isProcessing)
+                {
+                    <span>Procesando...</span>
+                }
+                else
+                {
+                    <span>PAGAR  Q @_summary.TotalAmount.ToString("F2")</span>
+                }
+            </button>
+        }
+        else if (!string.IsNullOrEmpty(_selectedAddressText))
+        {
+            <!-- Dirección seleccionada pero logística aún calculando -->
+            <div class="checkout-calculating">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <span>Calculando costo de envío...</span>
+            </div>
+        }
+        else
+        {
+            <div class="checkout-hint">
+                Selecciona una dirección para calcular el envío.
+            </div>
+        }
+    }
+</div>
+
+
+@code {
+    // ── Parámetro de ruta ──────────────────────────────────────────────────────
+    [Parameter] public int OrderGroupId { get; set; }
+
+    // ── Estado interno ─────────────────────────────────────────────────────────
+    private bool _isLoading = true;
+    private bool _isProcessing = false;
+    private bool _logisticsConfirmed = false;
+
+    private List<PaymentMethodDto> _paymentMethods = new();
+    private PaymentMethodDto? _selectedPaymentMethod;
+    private ConfirmOrderGroupResult? _summary;
+
+    private string _selectedAddressText = string.Empty;
+    private int? _selectedAddressId;
+    private string _referenceNumber = string.Empty;
+    private string _errorMessage = string.Empty;
+
+    // ── Computed ───────────────────────────────────────────────────────────────
+    private bool _canPay =>
+        _logisticsConfirmed
+        && _selectedPaymentMethod != null
+        && (_selectedPaymentMethod.RequiresReference == false
+            || !string.IsNullOrWhiteSpace(_referenceNumber));
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // 1. Cargar métodos de pago
+            _paymentMethods = await PaymentService.GetActivePaymentMethodsAsync();
+
+            // 2. Priorizar dirección de sesión sobre IsDefault
+            if (Session.SelectedShippingAddressId.HasValue)
+            {
+                _selectedAddressId = Session.SelectedShippingAddressId.Value;
+                _selectedAddressText = Session.SelectedAddressText ?? string.Empty;
+            }
+            else
+            {
+                // Fallback: cargar direcciones y tomar la default
+                var addresses = await ShippingService.GetMyShippingAddressesAsync();
+                var def = addresses.FirstOrDefault(a => a.IsDefault)
+                       ?? addresses.FirstOrDefault();
+
+                if (def != null)
+                {
+                    _selectedAddressId = def.Id;
+                    _selectedAddressText = $"{def.Alias} - {def.AddressLine1}, {def.City}";
+
+                    // Persistir en sesión para consistencia
+                    Session.SelectedShippingAddressId = def.Id;
+                    Session.SelectedAddressText = _selectedAddressText;
+                }
+            }
+
+            // 3. Si hay dirección, calcular logística inmediatamente
+            if (_selectedAddressId.HasValue)
+                await RecalculateLogisticsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error al cargar el checkout: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Se ejecuta al regresar desde SelectDeliveryAddressPage (NavigationManager cambia params).
+        // Si la sesión tiene una dirección diferente a la actual, recalcular.
+        if (!_isLoading
+            && Session.SelectedShippingAddressId.HasValue
+            && Session.SelectedShippingAddressId != _selectedAddressId)
+        {
+            _selectedAddressId = Session.SelectedShippingAddressId.Value;
+            _selectedAddressText = Session.SelectedAddressText ?? string.Empty;
+            _logisticsConfirmed = false;
+            _summary = null;
+
+            await RecalculateLogisticsAsync();
+        }
+    }
+
+    // ── Métodos ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Navega a SelectDeliveryAddressPage con returnUrl apuntando de vuelta a este checkout.
+    /// Al regresar, OnParametersSetAsync detecta el cambio y recalcula.
+    /// </summary>
+    private void ChangeAddress()
+    {
+        var returnUrl = Uri.EscapeDataString($"/checkout/{OrderGroupId}");
+        Navigation.NavigateTo($"/customer/select-address?returnUrl={returnUrl}");
+    }
+
+    /// <summary>
+    /// Llama a POST /api/checkout/confirm-order-group.
+    /// Transiciona Draft → CapacityValidated y obtiene totales reales.
+    /// </summary>
+    private async Task RecalculateLogisticsAsync()
+    {
+        if (_selectedAddressId == null) return;
+
+        _isLoading = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var request = new ConfirmOrderGroupRequest
+            {
+                OrderGroupId = OrderGroupId,
+                ShippingAddressId = _selectedAddressId.Value
+            };
+
+            _summary = await CheckoutService.ConfirmOrderGroupLogisticsAsync(request);
+            _logisticsConfirmed = true;
+
+            // Actualizar texto de dirección con el confirmado por el backend
+            if (!string.IsNullOrEmpty(_summary.DeliveryAddressText))
+            {
+                _selectedAddressText = _summary.DeliveryAddressText;
+                Session.SelectedAddressText = _selectedAddressText;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logisticsConfirmed = false;
+            _errorMessage = $"No se pudo calcular el envío: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void SelectPaymentMethod(PaymentMethodDto method)
+    {
+        _selectedPaymentMethod = method;
+        _referenceNumber = string.Empty; // limpiar referencia al cambiar método
+        _errorMessage = string.Empty;
+    }
+
+    /// <summary>
+    /// Paso final: POST /api/checkout.
+    /// Transiciona CapacityValidated → PendingPayment / PaymentConfirmed.
+    /// </summary>
+    private async Task ProcessOrder()
+    {
+        if (!_canPay || _summary == null) return;
+
+        _isProcessing = true;
+        _errorMessage = string.Empty;
+
+        try
+        {
+            var request = new ConfirmCheckoutRequest
+            {
+                OrderGroupId = OrderGroupId,
+                PaymentMethodId = _selectedPaymentMethod!.Id,
+                Reference = _referenceNumber
+            };
+
+            var result = await CheckoutService.FinalizeCheckoutAsync(request);
+
+            if (result != null)
+            {
+                // Limpiar dirección de sesión (el pedido ya fue confirmado)
+                Session.SelectedShippingAddressId = null;
+                Session.SelectedAddressText = null;
+
+                Navigation.NavigateTo($"/order-confirmation/{OrderGroupId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error al procesar el pago: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private static string GetPaymentIcon(string name) => name.ToLower() switch
+    {
+        "efectivo" or "cash" => "💵",
+        "tarjeta" or "card" => "💳",
+        "transferencia" or "transfer" => "🏦",
+        "nota de crédito" or "credit_note" => "📄",
+        _ => "💰"
+    };
+}

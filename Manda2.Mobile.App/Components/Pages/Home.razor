@@ -1,0 +1,15 @@
+﻿@page "/home"
+@inject NavigationManager Navigation
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+<button class="btn-primary" @onclick="RedirectProfile"> </button>
+
+        @code {
+     async Task RedirectProfile() =>
+
+                // Si no hay sesión, directo al grano: Login
+                Navigation.NavigateTo("/auth/profile");
+}

@@ -1,0 +1,87 @@
+﻿@using Manda2.Contracts.Catalog
+@inject NavigationManager NavigationManager
+
+@if (Merchants != null && Merchants.Any())
+{
+    <div class="merchant-carousel-wrapper">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <div class="merchant-carousel-header">
+                <span class="merchant-carousel-title">@Title</span>
+            </div>
+        }
+        <div class="merchant-carousel-scroll">
+            @foreach (var merchant in Merchants)
+            {
+                <div class="merchant-carousel-card" @onclick="() => OnMerchantClick(merchant.MerchantId)">
+                    <div class="merchant-carousel-img-wrapper">
+                        <img src="@(_logoCache.TryGetValue(merchant.MerchantId, out var src) && src != null ? src : "https://placehold.co/130x90?text=Logo")"
+                             alt="@merchant.Name"
+                             class="merchant-carousel-img" />
+                        @if (merchant.IsOpen)
+                        {
+                            <span class="merchant-carousel-badge open">Abierto</span>
+                        }
+                    </div>
+                    <div class="merchant-carousel-info">
+                        <span class="merchant-carousel-name">@merchant.Name</span>
+                        <span class="merchant-carousel-cat">@(merchant.CategoryName ?? "Comercio")</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter][EditorRequired] public List<MerchantSummaryDto> Merchants { get; set; } = null!;
+
+    /// <summary>
+    /// Cache de logos descargados: MerchantId → data:image/png;base64,...
+    /// Mismo patrón que MerchantCard.LoadLogoAsync para bypass SSL self-signed.
+    /// Key: MerchantId (no CategoryId — merchants distintos de la misma categoría son independientes).
+    /// </summary>
+    private Dictionary<int, string?> _logoCache = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Merchants == null) return;
+
+        foreach (var mer in Merchants)
+        {
+            // Solo descarga si no está en cache
+            if (!_logoCache.ContainsKey(mer.MerchantId))
+            {
+                _logoCache[mer.MerchantId] = await LoadLogoAsync(mer.LogoUrl);
+            }
+        }
+    }
+
+    private async Task<string?> LoadLogoAsync(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return null;
+
+        try
+        {
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            using var client = new HttpClient(handler);
+            var bytes = await client.GetByteArrayAsync(url);
+            return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void OnMerchantClick(int merchantId)
+    {
+        NavigationManager.NavigateTo($"/merchant/{merchantId}");
+    }
+}

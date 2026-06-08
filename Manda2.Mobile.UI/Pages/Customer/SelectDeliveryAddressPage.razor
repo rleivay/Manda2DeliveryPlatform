@@ -1,0 +1,155 @@
+﻿@page "/customer/select-address"
+@using Manda2.Contracts.Customer
+@using Manda2.Mobile.Services.ShippingAddress
+@using Manda2.Mobile.Services.Session
+@inject IShippingAddressApiService AddressService
+@inject ISessionService Session
+@inject NavigationManager Nav
+
+<div class="address-page">
+    <div class="address-header">
+        <h2>¿A dónde entregamos?</h2>
+        <p class="subtitle">Selecciona o agrega una dirección</p>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <p>Cargando direcciones...</p>
+        </div>
+    }
+    else
+    {
+        @if (_addresses.Any())
+        {
+            <div class="address-list">
+                @foreach (var addr in _addresses)
+                {
+                    <div class="address-card @(addr.Id == _selectedId ? "selected" : "")"
+                         @onclick="() => SelectAddress(addr)">
+                        <div class="address-icon">
+                            <span class="icon">@GetAliasIcon(addr.Alias)</span>
+                        </div>
+                        <div class="address-info">
+                            <span class="alias">@addr.Alias</span>
+                            @if (addr.IsDefault)
+                            {
+                                <span class="badge-default">Principal</span>
+                            }
+                            <p class="address-line">@addr.AddressLine1</p>
+                            @if (!string.IsNullOrEmpty(addr.ApartmentNumber))
+                            {
+                                <p class="apartment">#@addr.ApartmentNumber</p>
+                            }
+                            @if (!string.IsNullOrEmpty(addr.DeliveryNotes))
+                            {
+                                <p class="notes">📝 @addr.DeliveryNotes</p>
+                            }
+                            <p class="city">@addr.City</p>
+                        </div>
+                        @if (addr.Id == _selectedId)
+                        {
+                            <div class="check-icon">✓</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <span class="empty-icon">📍</span>
+                <p>Aún no tienes direcciones guardadas.</p>
+            </div>
+        }
+
+        <button class="btn-add-address" @onclick="GoToCreate">
+            + Agregar nueva dirección
+        </button>
+
+        @if (_selectedId.HasValue)
+        {
+            <button class="btn-confirm" @onclick="Confirm">
+                Confirmar dirección
+            </button>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="error-msg">@_error</p>
+    }
+</div>
+@code
+{
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private List<ShippingAddressDto> _addresses = new();
+    private int? _selectedId;
+    private bool _loading = true;
+    private string _error = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _addresses = await AddressService.GetMyShippingAddressesAsync();
+
+            if (Session.SelectedShippingAddressId.HasValue)
+            {
+                _selectedId = Session.SelectedShippingAddressId.Value;
+            }
+            else
+            {
+                _selectedId = _addresses.FirstOrDefault(a => a.IsDefault)?.Id
+                              ?? _addresses.FirstOrDefault()?.Id;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"No se pudieron cargar las direcciones: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectAddress(ShippingAddressDto address)
+    {
+        _selectedId = address.Id;
+    }
+
+    private void GoToCreate()
+    {
+        var returnUrl = Uri.EscapeDataString(ReturnUrl ?? "/customer/home");
+        Nav.NavigateTo($"/customer/create-address?returnUrl={returnUrl}");
+    }
+
+    private static string GetAliasIcon(string alias) => alias.ToLower() switch
+    {
+        "casa" => "🏠",
+        "trabajo" => "🏢",
+        "gym" => "🏋️",
+        _ => "📍"
+    };
+
+        private void Confirm()
+        {
+            if (!_selectedId.HasValue)
+                return;
+
+            var selected = _addresses.First(x => x.Id == _selectedId.Value);
+
+            Session.SelectedShippingAddressId = selected.Id;
+            Session.SelectedAddressText = $"{selected.Alias} - {selected.AddressLine1}, {selected.City}";
+
+            Nav.NavigateTo(ReturnUrl ?? "/customer/home");
+        }
+    
+        
+
+    }

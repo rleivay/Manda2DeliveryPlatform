@@ -1,0 +1,28 @@
+﻿@page "/"
+@using Manda2.Mobile.Services.Session
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var session = await SessionService.GetSessionAsync();
+
+        if (session == null || string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            //Navigation.NavigateTo("/test-map");
+            Navigation.NavigateTo("/auth/login");
+            return;
+        }
+
+        var destination = session.Role switch
+        {
+            "Customer" => "/customer/select-address?returnUrl=%2Fcustomer%2Fhome",
+            "Driver" => "/driver/home",
+            "Merchant" => "/merchant/home",
+            _ => "/auth/login"
+        };
+
+        Navigation.NavigateTo(destination);
+    }
+}

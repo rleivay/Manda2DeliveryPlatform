@@ -1,0 +1,119 @@
+﻿@using Manda2.Contracts.Catalog
+@using Manda2.Mobile.Services.Cart
+@inject IHttpClientFactory HttpClientFactory
+
+<div class="mpcard @(Product.IsAvailable ? "" : "mpcard--unavailable")">
+
+    @* ── Imagen ── *@
+    <div class="mpcard__img-wrapper">
+        <img src="@(_imageSrc ?? "https://placehold.co/100x100?text=Producto")"
+             alt="@Product.Name"
+             class="mpcard__img" />
+        @if (!Product.IsAvailable)
+        {
+            <div class="mpcard__unavailable-overlay">No disponible</div>
+        }
+    </div>
+
+    @* ── Info ── *@
+    <div class="mpcard__body">
+        <p class="mpcard__name">@Product.Name</p>
+
+        @if (!string.IsNullOrEmpty(Product.Description))
+        {
+            <p class="mpcard__desc">@Product.Description</p>
+        }
+
+        <div class="mpcard__footer">
+            <span class="mpcard__price">Q @Product.SalePrice.ToString("F2")</span>
+
+            @if (Product.IsAvailable)
+            {
+                @if (CurrentQuantity == 0)
+                {
+                    <button class="mpcard__btn-add"
+                            @onclick="OnAddClick"
+                            disabled="@IsAddDisabled"
+                            title="@(IsAddDisabled ? "Límite de comercios alcanzado" : "Agregar")">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                }
+                else
+                {
+                    <div class="mpcard__qty-control">
+                        <button class="mpcard__qty-btn" @onclick="OnRemoveClick">
+                            <i class="bi bi-dash-lg"></i>
+                        </button>
+                        <span class="mpcard__qty-value">@CurrentQuantity</span>
+                        <button class="mpcard__qty-btn" @onclick="OnAddClick"
+                                disabled="@IsAddDisabled">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+
+        @if (CurrentQuantity > 0)
+        {
+            <div class="mpcard__note-wrapper">
+                <input type="text"
+                       class="mpcard__note-input"
+                       placeholder="Nota (ej: sin cebolla)"
+                       maxlength="300"
+                       value="@CurrentNote"
+                       @oninput="OnNoteInput" />
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public MerchantProductDto Product { get; set; } = null!;
+
+    [Parameter] public int CurrentQuantity { get; set; }
+    [Parameter] public string? CurrentNote { get; set; }
+    [Parameter] public bool IsAddDisabled { get; set; }
+
+    [Parameter] public EventCallback<MerchantProductDto> OnAdd { get; set; }
+    [Parameter] public EventCallback<MerchantProductDto> OnRemove { get; set; }
+    [Parameter] public EventCallback<(MerchantProductDto Product, string? Note)> OnNoteChanged { get; set; }
+
+    // ── Estado interno ────────────────────────────────────────────────────
+    private string? _imageSrc;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo recarga si la URL cambió (evita re-fetch en cada re-render)
+        var url = Product.ImageUrl;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _imageSrc = null;
+            return;
+        }
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ImageClient");
+            var bytes = await client.GetByteArrayAsync(url);
+
+            var mime = url.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png"
+                     : url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ? "image/webp"
+                     : "image/jpeg";
+
+            _imageSrc = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MerchantProductCard] Error imagen {Product.ProductId}: {ex.Message}");
+            _imageSrc = null;
+        }
+    }
+
+    private async Task OnAddClick() => await OnAdd.InvokeAsync(Product);
+    private async Task OnRemoveClick() => await OnRemove.InvokeAsync(Product);
+    private async Task OnNoteInput(ChangeEventArgs e)
+        => await OnNoteChanged.InvokeAsync((Product, e.Value?.ToString()));
+}

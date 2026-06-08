@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!--<UseWPF>true</UseWPF>-->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Components\Auth\" />
+    <Folder Include="Components\Customer\" />
+    <Folder Include="Components\Driver\" />
+    <Folder Include="Components\Merchant\" />
+    <Folder Include="Components\Shared\" />
+    <Folder Include="Layout\" />
+
+    <Folder Include="Models\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Manda2.Mobile.Services\Manda2.Mobile.Services.csproj" />
+  </ItemGroup>
+
+</Project>

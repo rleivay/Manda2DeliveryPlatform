@@ -1,0 +1,125 @@
+﻿@page "/auth/profile"
+@using Manda2.Contracts.Auth
+@using Manda2.Mobile.Services.Auth
+@using Manda2.Mobile.Services.Session
+
+@inject IAuthService AuthService
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+<div class="profile-container">
+
+    <!-- ENCABEZADO CON AVATAR -->
+    <div class="profile-header">
+        <div class="avatar-circle">@_initials</div>
+        <div class="profile-info">
+            <h2 class="profile-name">@(_session?.FullName ?? _session?.Email ?? "Usuario")</h2>
+            <span class="profile-role-badge">@_session?.Role</span>
+        </div>
+    </div>
+
+    <!-- DATOS DE CUENTA -->
+    <div class="section-card">
+        <h3 class="section-title">Mi cuenta</h3>
+
+        <div class="info-row">
+            <span class="info-icon">📧</span>
+            <div class="info-content">
+                <span class="info-label">Correo</span>
+                <span class="info-value">@(_session?.Email ?? "—")</span>
+            </div>
+        </div>
+
+        <div class="info-row">
+            <span class="info-icon">🎭</span>
+            <div class="info-content">
+                <span class="info-label">Rol</span>
+                <span class="info-value">@(_session?.Role ?? "—")</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN SESIÓN — LOGOUT AL FINAL -->
+    <div class="section-card section-danger">
+        <h3 class="section-title">Sesión</h3>
+
+        @if (!string.IsNullOrEmpty(_logoutError))
+        {
+            <div class="alert-error">⚠️ @_logoutError</div>
+        }
+
+        <button class="btn-logout"
+                @onclick="HandleLogout"
+                disabled="@_isLoggingOut">
+            @(_isLoggingOut ? "⏳ Cerrando sesión..." : "🚪 Cerrar sesión")
+        </button>
+
+        <p class="logout-hint">
+            Al cerrar sesión tu token será invalidado en el servidor.
+        </p>
+    </div>
+
+</div>
+
+@code {
+    private SessionData? _session = null;
+    private string _initials = "?";
+    private string _logoutError = string.Empty;
+    private bool _isLoggingOut = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _session = await SessionService.GetSessionAsync();
+
+        if (_session != null)
+        {
+            // Calcular iniciales para el avatar
+            var name = _session.FullName;
+            if (!string.IsNullOrEmpty(name))
+            {
+                var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                _initials = parts.Length >= 2
+                    ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+                    : name[..1].ToUpper();
+            }
+            else if (!string.IsNullOrEmpty(_session.Email))
+            {
+                _initials = _session.Email[..1].ToUpper();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Flujo de logout:
+    /// 1. POST api/auth/logout → invalida RefreshToken en la DB del servidor.
+    /// 2. ClearSessionAsync   → elimina datos de SecureStorage local.
+    /// 3. Redirigir a /login.
+    /// Si el servidor falla, igual se limpia la sesión local.
+    /// </summary>
+    private async Task HandleLogout()
+    {
+        _logoutError = string.Empty;
+        _isLoggingOut = true;
+
+        try
+        {
+            // Invalidar token en el servidor
+            await AuthService.LogoutAsync();
+        }
+        catch
+        {
+            // Si el servidor no responde, continuamos con el logout local
+        }
+        finally
+        {
+            // ClearSessionAsync ya limpia SecureStorage
+            // y además dispara OnSessionChanged(null)
+            await SessionService.ClearSessionAsync();
+
+            _isLoggingOut = false;
+
+            // Ruta correcta
+            Navigation.NavigateTo("/auth/login", forceLoad: false);
+        }
+    }
+}

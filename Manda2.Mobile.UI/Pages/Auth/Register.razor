@@ -1,0 +1,169 @@
+﻿@page "/auth/register"
+@using Manda2.Contracts.Auth
+@using Manda2.Mobile.Services.Auth
+
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="register-container">
+
+    <!-- ENCABEZADO -->
+    <div class="page-header">
+        <button class="btn-back" @onclick='() => Navigation.NavigateTo("/login")'>
+            ← Volver
+        </button>
+        <span class="brand-logo-sm">🛵</span>
+    </div>
+
+    <div class="form-card">
+        <h2 class="form-title">Crear cuenta</h2>
+        <p class="form-subtitle">Únete a Manda2 y empieza a pedir</p>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert-error">⚠️ @_errorMessage</div>
+        }
+
+        @if (_registrationSuccess)
+        {
+            <div class="alert-success">
+                ✅ ¡Cuenta creada exitosamente!
+                <br />
+                <button class="btn-link" @onclick='() => Navigation.NavigateTo("/login")'>
+                    Ir al Login →
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="form-group">
+                <label class="form-label">Nombre</label>
+                <input class="form-input" type="text" placeholder="Juan"
+                       @bind="_firstName" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Apellido</label>
+                <input class="form-input" type="text" placeholder="Pérez"
+                       @bind="_lastName" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Correo electrónico</label>
+                <input class="form-input" type="email" placeholder="tucorreo@ejemplo.com"
+                       @bind="_email" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Teléfono</label>
+                <input class="form-input" type="tel" placeholder="+502 1234-5678"
+                       @bind="_phone" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <div class="input-password-wrapper">
+                    <input class="form-input"
+                           type="@(_showPassword ? "text" : "password")"
+                           placeholder="Mínimo 8 caracteres"
+                           @bind="_password" @bind:event="oninput" />
+                    <button class="btn-toggle-password" @onclick="TogglePassword">
+                        @(_showPassword ? "🙈" : "👁️")
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Confirmar contraseña</label>
+                <input class="form-input" type="password" placeholder="Repite tu contraseña"
+                       @bind="_confirmPassword" @bind:event="oninput" />
+            </div>
+
+            <button class="btn-primary" @onclick="HandleRegister" disabled="@_isLoading">
+                @(_isLoading ? "⏳ Creando cuenta..." : "Crear cuenta")
+            </button>
+
+            <div class="form-divider">¿Ya tienes cuenta?</div>
+
+            <button class="btn-secondary" @onclick='() => Navigation.NavigateTo("/login")'>
+                Iniciar sesión
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string _email = string.Empty;
+    private string _phone = string.Empty;
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private string _errorMessage = string.Empty;
+    private bool _isLoading = false;
+    private bool _showPassword = false;
+    private bool _registrationSuccess = false;
+
+    /// <summary>
+    /// Flujo de registro:
+    /// 1. Validación client-side.
+    /// 2. POST api/auth/register via IAuthService.
+    /// 3. Mostrar confirmación o error.
+    /// </summary>
+    private async Task HandleRegister()
+    {
+        _errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_firstName) ||
+            string.IsNullOrWhiteSpace(_email) ||
+            string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Nombre, correo y contraseña son obligatorios.";
+            return;
+        }
+
+        if (_password != _confirmPassword)
+        {
+            _errorMessage = "Las contraseñas no coinciden.";
+            return;
+        }
+
+        if (_password.Length < 8)
+        {
+            _errorMessage = "La contraseña debe tener al menos 8 caracteres.";
+            return;
+        }
+
+        _isLoading = true;
+
+        try
+        {
+            var request = new RegisterRequest
+            {
+                Email = _email.Trim(),
+                Password = _password,
+                Role = "Customer",          // Fijo desde la app MAUI
+                FirstName = _firstName.Trim(),
+                LastName = _lastName.Trim(),
+                Phone = _phone.Trim()
+            };
+
+            var result = await AuthService.RegisterAsync(request);
+
+            if (result.Success)
+                _registrationSuccess = true;
+            else
+                _errorMessage = result.Message ?? "No se pudo crear la cuenta.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void TogglePassword() => _showPassword = !_showPassword;
+}

@@ -1,0 +1,108 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+@if (!_isPublicPage)
+{
+    <div class="app-shell @_themeClass">
+        <main class="app-content">
+            @Body
+        </main>
+        <NavMenu Role="@_userRole" />
+    </div>
+}
+else
+{
+    <div class="app-shell-public">
+        @Body
+    </div>
+}
+
+@code {
+    private string _userRole = string.Empty;
+    private string _themeClass = "theme-customer";
+    private bool _isPublicPage = false;
+
+    private static readonly HashSet<string> PublicRoutes =
+        new(StringComparer.OrdinalIgnoreCase) { "/auth/login", "/auth/register", "/" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ── Suscribirse al evento de cambio de sesión ────
+        // Cuando el usuario hace login/logout, SessionService dispara este evento
+        // y el layout se re-renderiza con el nuevo rol.
+        SessionService.OnSessionChanged += HandleSessionChanged;
+
+        // ── Suscribirse a cambios de ruta ────
+        Navigation.LocationChanged += OnLocationChanged;
+
+        await EvaluateRouteAndSession();
+    }
+
+    /// <summary>
+    /// Callback del evento ISessionService.OnSessionChanged.
+    /// Se ejecuta cuando el usuario hace login o logout.
+    /// </summary>
+    private void HandleSessionChanged(string? newRole)
+    {
+        _userRole = newRole ?? string.Empty;
+
+        _themeClass = _userRole.ToLower() switch
+        {
+            "driver" => "theme-driver",
+            "merchant" => "theme-merchant",
+            _ => "theme-customer"
+        };
+
+        if (!string.IsNullOrEmpty(_userRole))
+            _ = SessionService.StartSessionAsync();
+
+        // Forzar re-render en el hilo de UI
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Se ejecuta cada vez que cambia la ruta.
+    /// </summary>
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // Evaluar ruta de forma síncrona para evitar async void
+        var relativePath = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        _isPublicPage = PublicRoutes.Contains(relativePath);
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Lee la sesión inicial y determina el tema y si la ruta es pública.
+    /// </summary>
+    private async Task EvaluateRouteAndSession()
+    {
+        var relativePath = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        _isPublicPage = PublicRoutes.Contains(relativePath);
+
+        if (!_isPublicPage)
+        {
+            var session = await SessionService.GetSessionAsync();
+            _userRole = session?.Role ?? string.Empty;
+
+            _themeClass = _userRole.ToLower() switch
+            {
+                "driver" => "theme-driver",
+                "merchant" => "theme-merchant",
+                _ => "theme-customer"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Desuscribirse de todos los eventos al destruir el componente.
+    /// Evita memory leaks.
+    /// </summary>
+    public void Dispose()
+    {
+        SessionService.OnSessionChanged -= HandleSessionChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

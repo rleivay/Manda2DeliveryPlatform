@@ -1,0 +1,64 @@
+﻿@using Manda2.Mobile.Services.Session
+@using Manda2.Mobile.UI.Components.Layout
+
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+<Router AppAssembly="@typeof(Routes).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+
+    <NotFound>
+        <LayoutView Layout="@typeof(Manda2.Mobile.UI.Components.Layout.MainLayout)">
+            <div class="p-4">
+                <h3>Página no encontrada</h3>
+                <p>La ruta solicitada no existe todavía.</p>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var relativePath = Navigation
+            .ToBaseRelativePath(Navigation.Uri)
+            .Trim()
+            .ToLowerInvariant();
+
+        // Normalizar ruta raíz.
+        var isRoot = string.IsNullOrWhiteSpace(relativePath);
+
+        // Si el usuario está en auth, no forzamos redirección.
+        if (relativePath.StartsWith("auth/"))
+            return;
+
+        var isAuthenticated = await SessionService.IsAuthenticatedAsync();
+
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo("/auth/login", forceLoad: false);
+            return;
+        }
+
+        // Si ya está autenticado y entra a raíz, lo mandamos según rol.
+        if (isRoot)
+        {
+            var session = await SessionService.GetSessionAsync();
+
+            var destination = session?.Role switch
+            {
+                "Customer" => "/customer/home",
+                "Driver" => "/driver/home",
+                "Merchant" => "/merchant/home",
+                _ => "/auth/login"
+            };
+
+            Navigation.NavigateTo(destination, forceLoad: false);
+            //Navigation.NavigateTo("/test-map", forceLoad: false);
+            //Navigation.NavigateTo("/test-map");
+        }
+    }
+}
