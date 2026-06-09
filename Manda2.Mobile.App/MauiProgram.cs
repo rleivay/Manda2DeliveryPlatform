@@ -3,7 +3,6 @@ using Manda2.Mobile.Services.Auth;
 using Manda2.Mobile.Services.Cart;
 using Manda2.Mobile.Services.Catalog;
 using Manda2.Mobile.Services.CheckOut;
-using Manda2.Mobile.Services.Maps;
 using Manda2.Mobile.Services.Orders;
 using Manda2.Mobile.Services.Session;
 using Manda2.Mobile.Services.ShippingAddress;
@@ -112,8 +111,7 @@ namespace Manda2.Mobile.App
 
             // ─── Servicios de estado local / UI ──────────────────────────────────────
             builder.Services.AddSingleton<ICartService, CartService>();
-            builder.Services.AddSingleton<ILocationService, LocationService>();
-
+            
             // ─── Servicios de autenticación y sesión ─────────────────────────────────
             builder.Services.AddSingleton<ISessionService, SessionService>();
 

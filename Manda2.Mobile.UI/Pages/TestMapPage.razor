@@ -5,17 +5,32 @@
     <span>Lon: @_Lon.ToString("F6")</span>
 </div>
 
+@if (!string.IsNullOrWhiteSpace(_Address))
+{
+    <div class="address-display mt-1">
+        <strong>Dirección:</strong> @_Address
+    </div>
+}
+
 <DeliveryMapComponent Latitude="@_Lat"
-                      Longitude="_Lon"
-                      OnLocationChanged="UpdateCoords" />
+                      Longitude="@_Lon"
+                      OnLocationChanged="UpdateCoords"
+                      OnAddressResolved="UpdateAddress" />
 
 @code {
     double _Lat = 13.093765924724813;
-    double _Lon=-86.0006766303026;
-    string _Address = "Managua, Nicaragua";
+    double _Lon = -86.0006766303026;
+    string _Address = string.Empty;
+
     private void UpdateCoords((double lat, double lon) coords)
     {
         _Lat = coords.lat;
-        _Lon= coords.lon;
+        _Lon = coords.lon;
+    }
+
+    private void UpdateAddress(string address)
+    {
+        _Address = address;
+        StateHasChanged();
     }
 }

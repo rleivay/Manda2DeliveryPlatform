@@ -3,73 +3,102 @@
 @inject IShippingAddressApiService ShippingAddressApi
 @implements IAsyncDisposable
 
-<div id="@MapId" style="width:100%; height:300px; border-radius:12px;"></div>
+<div style="position:relative; width:100%;">
+    @if (_isLoadingConfig)
+    {
+        <div class="map-loader">
+            <p>Configurando mapa...</p>
+        </div>
+    }
+
+    <button class="btn-gps-location"
+            @onclick="CenterOnDeviceLocationAsync"
+            title="Obtener ubicación actual">
+        📍 Obtener Ubicación Actual
+    </button>
+
+    <div id="@MapId" style="width:100%; height:300px; border-radius:12px; background-color: #eee;"></div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_resolvedAddress))
+{
+    <div class="address-resolved-panel mt-2">
+        <span class="address-icon">🏠</span>
+        <span>@_resolvedAddress</span>
+    </div>
+}
 
 @code {
-    // ── Parámetros públicos ────────────────────────────────────────────────
     [Parameter] public string MapId { get; set; } = "delivery-map";
-    [Parameter] public double Latitude { get; set; } = 14.6349;   // Guatemala City default
+    [Parameter] public double Latitude { get; set; } = 14.6349;
     [Parameter] public double Longitude { get; set; } = -90.5069;
     [Parameter] public EventCallback<(double Lat, double Lon)> OnLocationChanged { get; set; }
     [Parameter] public EventCallback<string> OnAddressResolved { get; set; }
 
-    // ── Estado interno ─────────────────────────────────────────────────────
     private IJSObjectReference? _mapModule;
     private DotNetObjectReference<DeliveryMapComponent>? _dotNetRef;
     private bool _mapInitialized = false;
-
-    // ── Ciclo de vida ──────────────────────────────────────────────────────
+    private bool _isLoadingConfig = true;
+    private string _resolvedAddress = string.Empty;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _mapInitialized) return;
 
-        _mapInitialized = true;
-        _dotNetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            if (Latitude == 0 && Longitude == 0)
+            {
+                // Coordenadas por defecto (Managua o Guate) para evitar el error de "null/0"
+                Latitude = 14.6349;
+                Longitude = -90.5069;
+            }
 
-        // Cargar módulo JS de Leaflet
-        _mapModule = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "/_content/Manda2.Mobile.UI/js/deliveryMap.js");
+            // 1. Obtener clave del backend
+            var config = await ShippingAddressApi.GetMapsConfigAsync();
 
-        // Inicializar mapa con coordenadas iniciales
-        await _mapModule.InvokeVoidAsync(
-            "initDeliveryMap", MapId, Latitude, Longitude, _dotNetRef);
+            if (config == null || string.IsNullOrEmpty(config.SubscriptionKey))
+            {
+                Console.WriteLine("[DeliveryMap] Error: No se pudo obtener la Key de Azure Maps del Backend.");
+                return;
+            }
+
+            _isLoadingConfig = false;
+            _mapInitialized = true;
+            _dotNetRef = DotNetObjectReference.Create(this);
+
+            // 2. Importar JS
+            _mapModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Manda2.Mobile.UI/js/deliveryMap.js");
+
+            // 3. Inicializar con la Key recibida
+            await _mapModule.InvokeVoidAsync(
+                "initDeliveryMap",
+                MapId,
+                Latitude,
+                Longitude,
+                config.SubscriptionKey,
+                _dotNetRef);
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DeliveryMap] Crash: {ex.Message}");
+        }
     }
 
-    // ── Método público: centrar en ubicación del dispositivo ───────────────
-
-    /// <summary>
-    /// Obtiene la ubicación GPS del dispositivo via JS (navigator.geolocation),
-    /// centra el mapa y resuelve la dirección textual desde el BACKEND.
-    /// NO usa MAUI Geocoding.Default — evita el error de MapService.ServiceToken.
-    /// </summary>
     public async Task CenterOnDeviceLocationAsync()
     {
         if (_mapModule is null) return;
-
-        // 1. Obtener coordenadas del dispositivo via JS
-        var location = await _mapModule.InvokeAsync<DeviceLocationResult?>(
-            "tryGetDeviceLocation");
-
+        var location = await _mapModule.InvokeAsync<DeviceLocationResult?>("tryGetDeviceLocation");
         if (location is null) return;
 
-        // 2. Mover el mapa a la nueva posición
-        await _mapModule.InvokeVoidAsync(
-            "updateMapCenter", MapId, location.Latitude, location.Longitude);
-
-        // 3. Notificar al padre las nuevas coordenadas
+        await _mapModule.InvokeVoidAsync("setMapCenter", MapId, location.Latitude, location.Longitude);
         await OnLocationChanged.InvokeAsync((location.Latitude, location.Longitude));
-
-        // 4. Resolver dirección textual desde el BACKEND (no MAUI Geocoding)
         await ResolveAddressFromBackendAsync(location.Latitude, location.Longitude);
     }
 
-    // ── Callback desde JS: el usuario movió el marcador ───────────────────
-
-    /// <summary>
-    /// Invocado desde deliveryMap.js cuando el usuario arrastra el marcador
-    /// o mueve el mapa. Notifica coordenadas y resuelve dirección.
-    /// </summary>
     [JSInvokable]
     public async Task OnMapMoved(double lat, double lon)
     {
@@ -77,52 +106,26 @@
         await ResolveAddressFromBackendAsync(lat, lon);
     }
 
-    // ── Método privado: reverse geocoding via Backend ──────────────────────
-
-    /// <summary>
-    /// Llama a GET /api/maps/reverse-geocode?lat=X&amp;lon=Y en el backend.
-    /// El backend usa Azure Maps con la clave almacenada en appsettings.json.
-    /// La clave NUNCA llega al cliente.
-    /// </summary>
     private async Task ResolveAddressFromBackendAsync(double lat, double lon)
     {
-        try
+        var result = await ShippingAddressApi.GetReverseGeocodeAsync(lat, lon);
+        if (result?.Resolved == true)
         {
-            var result = await ShippingAddressApi.GetReverseGeocodeAsync(lat, lon);
-
-            if (result?.Resolved == true && !string.IsNullOrWhiteSpace(result.Address))
-            {
-                await OnAddressResolved.InvokeAsync(result.Address);
-            }
-        }
-        catch
-        {
-            // Silencioso — el usuario puede escribir la dirección manualmente
+            _resolvedAddress = result.Address ?? "";
+            await OnAddressResolved.InvokeAsync(_resolvedAddress);
+            StateHasChanged();
         }
     }
-
-    // ── Dispose ────────────────────────────────────────────────────────────
 
     public async ValueTask DisposeAsync()
     {
         if (_mapModule is not null)
         {
-            try
-            {
-                await _mapModule.InvokeVoidAsync("destroyMap", MapId);
-                await _mapModule.DisposeAsync();
-            }
-            catch { }
+            try { await _mapModule.InvokeVoidAsync("destroyMap", MapId); } catch { }
+            await _mapModule.DisposeAsync();
         }
-
         _dotNetRef?.Dispose();
     }
 
-    // ── DTO interno para deserializar respuesta JS ─────────────────────────
-
-    private sealed class DeviceLocationResult
-    {
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
-    }
+    private sealed class DeviceLocationResult { public double Latitude { get; set; } public double Longitude { get; set; } }
 }
