@@ -1,131 +1,72 @@
-﻿@using Manda2.Mobile.Services.ShippingAddress
-@inject IJSRuntime JS
-@inject IShippingAddressApiService ShippingAddressApi
+﻿@inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div style="position:relative; width:100%;">
-    @if (_isLoadingConfig)
-    {
-        <div class="map-loader">
-            <p>Configurando mapa...</p>
-        </div>
-    }
-
-    <button class="btn-gps-location"
-            @onclick="CenterOnDeviceLocationAsync"
-            title="Obtener ubicación actual">
-        📍 Obtener Ubicación Actual
-    </button>
-
-    <div id="@MapId" style="width:100%; height:300px; border-radius:12px; background-color: #eee;"></div>
+<div style="width:100%; height:300px; border:1px solid #ccc; border-radius:12px;">
+    <div id="@MapId" style="width:100%; height:100%;"></div>
 </div>
-
-@if (!string.IsNullOrWhiteSpace(_resolvedAddress))
-{
-    <div class="address-resolved-panel mt-2">
-        <span class="address-icon">🏠</span>
-        <span>@_resolvedAddress</span>
-    </div>
-}
 
 @code {
     [Parameter] public string MapId { get; set; } = "delivery-map";
     [Parameter] public double Latitude { get; set; } = 14.6349;
     [Parameter] public double Longitude { get; set; } = -90.5069;
-    [Parameter] public EventCallback<(double Lat, double Lon)> OnLocationChanged { get; set; }
-    [Parameter] public EventCallback<string> OnAddressResolved { get; set; }
 
-    private IJSObjectReference? _mapModule;
     private DotNetObjectReference<DeliveryMapComponent>? _dotNetRef;
-    private bool _mapInitialized = false;
-    private bool _isLoadingConfig = true;
-    private string _resolvedAddress = string.Empty;
+    private bool _initialized;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _mapInitialized) return;
+        if (!firstRender || _initialized) return;
 
         try
         {
-            if (Latitude == 0 && Longitude == 0)
+            if (Latitude == 0 || Longitude == 0)
             {
-                // Coordenadas por defecto (Managua o Guate) para evitar el error de "null/0"
                 Latitude = 14.6349;
                 Longitude = -90.5069;
             }
 
-            // 1. Obtener clave del backend
-            var config = await ShippingAddressApi.GetMapsConfigAsync();
-
-            if (config == null || string.IsNullOrEmpty(config.SubscriptionKey))
-            {
-                Console.WriteLine("[DeliveryMap] Error: No se pudo obtener la Key de Azure Maps del Backend.");
-                return;
-            }
-
-            _isLoadingConfig = false;
-            _mapInitialized = true;
             _dotNetRef = DotNetObjectReference.Create(this);
 
-            // 2. Importar JS
-            _mapModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "/_content/Manda2.Mobile.UI/js/deliveryMap.js");
-
-            // 3. Inicializar con la Key recibida
-            await _mapModule.InvokeVoidAsync(
-                "initDeliveryMap",
+            await JS.InvokeVoidAsync(
+                "DeliveryMap.init",
                 MapId,
                 Latitude,
                 Longitude,
-                config.SubscriptionKey,
-                _dotNetRef);
+                "7PZOy9bQitGrSPIX1f0IKmXSIIeny2zO8n6r70dz3TJ2dTcJVyKaJQQJ99CFACrJL3JAmTUoAAAgAZMP1VZk",
+                _dotNetRef
+            );
 
-            StateHasChanged();
+            _initialized = true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DeliveryMap] Crash: {ex.Message}");
+            Console.WriteLine($"[DeliveryMapComponent] Error: {ex.Message}");
         }
-    }
-
-    public async Task CenterOnDeviceLocationAsync()
-    {
-        if (_mapModule is null) return;
-        var location = await _mapModule.InvokeAsync<DeviceLocationResult?>("tryGetDeviceLocation");
-        if (location is null) return;
-
-        await _mapModule.InvokeVoidAsync("setMapCenter", MapId, location.Latitude, location.Longitude);
-        await OnLocationChanged.InvokeAsync((location.Latitude, location.Longitude));
-        await ResolveAddressFromBackendAsync(location.Latitude, location.Longitude);
     }
 
     [JSInvokable]
     public async Task OnMapMoved(double lat, double lon)
     {
-        await OnLocationChanged.InvokeAsync((lat, lon));
-        await ResolveAddressFromBackendAsync(lat, lon);
-    }
-
-    private async Task ResolveAddressFromBackendAsync(double lat, double lon)
-    {
-        var result = await ShippingAddressApi.GetReverseGeocodeAsync(lat, lon);
-        if (result?.Resolved == true)
+        try
         {
-            _resolvedAddress = result.Address ?? "";
-            await OnAddressResolved.InvokeAsync(_resolvedAddress);
-            StateHasChanged();
+            Console.WriteLine($"[DeliveryMapComponent] Pin movido a: {lat}, {lon}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DeliveryMapComponent] Error en OnMapMoved: {ex.Message}");
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_mapModule is not null)
+        try
         {
-            try { await _mapModule.InvokeVoidAsync("destroyMap", MapId); } catch { }
-            await _mapModule.DisposeAsync();
+            await JS.InvokeVoidAsync("DeliveryMap.destroy", MapId);
+            _dotNetRef?.Dispose();
         }
-        _dotNetRef?.Dispose();
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DeliveryMapComponent] Dispose error: {ex.Message}");
+        }
     }
-
-    private sealed class DeviceLocationResult { public double Latitude { get; set; } public double Longitude { get; set; } }
 }

@@ -1,110 +1,90 @@
-﻿// PROPÓSITO: Gestión del mapa Azure Maps para DeliveryMapComponent.razor.
-//            Reemplaza completamente la implementación anterior con Leaflet.
-//
-// FUNCIONES EXPORTADAS:
-//   initDeliveryMap(elementId, lat, lon, clientId, dotNetRef)
-//   setMapCenter(elementId, lat, lon)
-//   destroyMap(elementId)
-//   tryGetDeviceLocation(timeoutMs)
-// ─────────────────────────────────────────────────────────────────────────────
+﻿// deliveryMap.js - Azure Maps v3 para MAUI Blazor Hybrid
 
-const _mapInstances = {};   // { elementId: { map, marker, datasource } }
+window.DeliveryMap = {
+    init: function (elementId, lat, lon, subscriptionKey, dotNetRef) {
+        try {
+            // Defensa explícita de tipos
+            const nLat = (typeof lat === 'number' && !Number.isNaN(lat)) ? lat : 14.6349;
+            const nLon = (typeof lon === 'number' && !Number.isNaN(lon)) ? lon : -90.5069;
 
-// ── Carga dinámica del SDK de Azure Maps ──────────────────────────────────────
-function loadAzureMapsSDK() {
-    return new Promise((resolve, reject) => {
-        if (window.atlas) { resolve(); return; }
-        const link = document.createElement('link');
-        link.rel = 'stylesheet'; link.href = 'https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css';
-        document.head.appendChild(link);
-        const script = document.createElement('script');
-        script.src = 'https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js';
-        script.onload = () => resolve(); script.onerror = () => reject(new Error('Error SDK'));
-        document.head.appendChild(script);
-    });
-}
+            const map = new atlas.Map(elementId, {
+                center: [nLon ?? -90.5069, nLat ?? 14.6349],
+                zoom: 14,
+                minZoom: 1,
+                maxZoom: 20,
+                pitch: 0,          // Evita null interno en el cálculo de cámara
+                bearing: 0,        // Evita null interno en el cálculo de cámara
+                language: 'es-419',
+                style: 'road',
+                view: 'Auto',
+                authOptions: {
+                    authType: 'subscriptionKey',
+                    subscriptionKey: subscriptionKey
+                }
+            });
 
-// ── Inicializa el mapa Azure Maps ─────────────────────────────────────────────
-export async function initDeliveryMap(elementId, lat, lon, subscriptionKey, dotNetRef) {
-    // Validar que lat y lon sean números válidos
-    const validLat = (lat !== null && lat !== undefined) ? lat : 14.6349;
-    const validLon = (lon !== null && lon !== undefined) ? lon : -90.5069;
+            map.events.add('ready', () => {
+                try {
+                    // NOTA: HtmlMarker en v3 NO soporta 'draggable' oficialmente.
+                    // Pasarlo genera warnings internos de propiedades numéricas nulas.
+                    const marker = new atlas.HtmlMarker({
+                        position: [nLon, nLat],
+                        color: 'red'
+                    });
+                    map.markers.add(marker);
 
-    await loadAzureMapsSDK();
-    if (_mapInstances[elementId]) { _mapInstances[elementId].map.dispose(); delete _mapInstances[elementId]; }
+                    // Click en el mapa -> reposicionar marcador
+                    map.events.add('click', (e) => {
+                        try {
+                            if (!e || !e.position) return;
 
-    // Crear mapa con autenticación por Client ID (AAD Managed Identity)
-    const map = new atlas.Map(elementId, {
-        center: [lon, lat],
-        zoom: 16,
-        language: 'es-419',
-        authOptions: { authType: 'subscriptionKey', subscriptionKey: subscriptionKey },
-        style: 'road',
-        disableTelemetry: true
-    });
+                            const pos = e.position; // [lon, lat]
+                            if (!Array.isArray(pos) || pos.length < 2 || pos[0] == null || pos[1] == null) return;
 
-    // Esperar a que el mapa esté listo
-    map.events.add('ready', () => {
-        // En lugar de SymbolLayer, usamos HtmlMarker para que sea draggable fácilmente
-        const marker = new atlas.HtmlMarker({
-            draggable: true,
-            color: 'Red',
-            position: [lon, lat]
-        });
+                            marker.setOptions({ position: pos });
+                            dotNetRef.invokeMethodAsync('OnMapMoved', pos[1], pos[0]);
+                        } catch (err) {
+                            console.error('[DeliveryMap] Error en click:', err);
+                        }
+                    });
 
-        // Evento: Al terminar de arrastrar el pin
-        map.events.add('dragend', marker, (e) => {
-            const pos = marker.getOptions().position;
-            dotNetRef.invokeMethodAsync('OnMapMoved', pos[1], pos[0]);
-        });
-        
-        // Evento: Click en el mapa mueve el pin
-        map.events.add('click', (e) => {
-            if (!e.position) return;
-            marker.setOptions({ position: e.position });
-            dotNetRef.invokeMethodAsync('OnMapMoved', e.position[1], e.position[0]);
-        });
+                    // Si necesitas drag nativo del marcador en v3, se implementa
+                    // manualmente con mousedown/mousemove/mouseup del mapa.
+                    // El navegador/WebView puede permitir arrastrar el DOM del HtmlMarker
+                    // por defecto, pero no es comportamiento garantizado de la API.
+                } catch (err) {
+                    console.error('[DeliveryMap] Error en ready:', err);
+                }
+            });
 
-        map.markers.add(marker);
-        _mapInstances[elementId] = { map, marker };
-    });
-}
+            window._deliveryMapInstance = map;
+        } catch (err) {
+            console.error('[DeliveryMap] Error al inicializar mapa:', err);
+        }
+    },
 
-// ── Mueve el marcador y centra el mapa ────────────────────────────────────────
-export function setMapCenter(elementId, lat, lon) {
-    const inst = _mapInstances[elementId];
-    if (!inst) return;
-    inst.map.setCamera({ center: [lon, lat], zoom: 16, type: 'ease', duration: 500 });
-    inst.marker.setOptions({ position: [lon, lat] });
-}
+    setCenter: function (elementId, lat, lon) {
+        try {
+            const map = window._deliveryMapInstance;
+            if (!map) return;
+            const nLat = (typeof lat === 'number' && !Number.isNaN(lat)) ? lat : 14.6349;
+            const nLon = (typeof lon === 'number' && !Number.isNaN(lon)) ? lon : -90.5069;
+            map.setCamera({ center: [nLon, nLat], zoom: 14 });
+        } catch (err) {
+            console.error('[DeliveryMap] Error en setCenter:', err);
+        }
+    },
 
-// ── Mueve el marcador en el datasource ───────────────────────────────────────
-function _moveMarker(elementId, lat, lon) {
-    const instance = _mapInstances[elementId];
-    if (!instance) return;
-
-    instance.datasource.clear();
-    const newPoint = new atlas.data.Feature(new atlas.data.Point([lon, lat]));
-    instance.datasource.add(newPoint);
-    instance.point = newPoint;
-}
-
-// ── Destruye el mapa y libera recursos ───────────────────────────────────────
-export function destroyMap(elementId) {
-    if (_mapInstances[elementId]) {
-        _mapInstances[elementId].map.dispose();
-        delete _mapInstances[elementId];
+    destroy: function (elementId) {
+        try {
+            if (window._deliveryMapInstance) {
+                window._deliveryMapInstance.dispose();
+                window._deliveryMapInstance = null;
+            }
+            const el = document.getElementById(elementId);
+            if (el) el.innerHTML = '';
+        } catch (err) {
+            console.error('[DeliveryMap] Error al destruir mapa:', err);
+        }
     }
-}
-
-// ── Obtiene ubicación del dispositivo vía browser Geolocation API ─────────────
-export async function tryGetDeviceLocation(timeoutMs = 8000) {
-    return new Promise((resolve) => {
-        if (!navigator.geolocation) { resolve(null); return; }
-        navigator.geolocation.getCurrentPosition(
-            (p) => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
-            () => resolve(null),
-            { enableHighAccuracy: true, timeout: timeoutMs }
-        );
-    });
-}
+};
