@@ -32,7 +32,7 @@ namespace Manda2.Mobile.App
 
             // ── Leer URL base desde configuración ────────────────────────────────────
             var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"]
-                             ?? "https://192.168.40.54:7255/";
+                             ?? "https://192.168.100.67:7255/";
 
             builder
                 .UseMauiApp<App>()

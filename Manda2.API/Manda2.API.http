@@ -1,4 +1,4 @@
-@Manda2.API_HostAddress = https://192.168.40.54:7255
+@Manda2.API_HostAddress = https://192.168.100.67:7255
 # @Manda2.API_HostAddress = http://localhost:5068
 
 GET {{Manda2.API_HostAddress}}/weatherforecast/

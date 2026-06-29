@@ -1,0 +1,216 @@
+﻿@page "/select-address"
+@using Manda2.Mobile.Services.ShippingAddress
+@inject IJSRuntime JS
+@inject IShippingAddressApiService ShippingAddressApi
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<style>
+    .map-fullscreen-page {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1000;
+        background: #fff;
+    }
+
+    .map-fullscreen-container {
+        width: 100%;
+        height: 100%;
+    }
+
+    .map-overlay {
+        position: absolute;
+        left: 0;
+        right: 0;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none; /* permite tocar el mapa debajo */
+    }
+
+        .map-overlay > * {
+            pointer-events: auto; /* reactiva interacción en hijos */
+        }
+
+    .top-panel {
+        top: 0;
+        background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0.7));
+    }
+
+    .bottom-panel {
+        bottom: 0;
+        background: linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0.7));
+        flex-direction: row;
+        gap: 12px;
+    }
+
+    .address-box {
+        width: 100%;
+        max-width: 600px;
+        background: #fff;
+        padding: 12px 16px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        font-size: 0.95rem;
+        color: #333;
+    }
+
+    .btn-map-action {
+        flex: 1;
+        max-width: 280px;
+        padding: 14px;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+    }
+
+    .btn-confirm {
+        background: #e11d48;
+        color: #fff;
+    }
+
+    .btn-cancel {
+        background: #e5e7eb;
+        color: #374151;
+    }
+</style>
+
+<div class="map-fullscreen-page">
+    <div id="fullscreen-map" class="map-fullscreen-container"></div>
+
+    <div class="map-overlay top-panel">
+        <div class="address-box">
+            @if (_isResolvingAddress)
+            {
+                <em>🔍 Detectando dirección...</em>
+            }
+            else if (!string.IsNullOrWhiteSpace(_resolvedAddress))
+            {
+                <span>@_resolvedAddress</span>
+            }
+            else
+            {
+                <span>Selecciona tu ubicación tocando el mapa</span>
+            }
+        </div>
+    </div>
+
+    <div class="map-overlay bottom-panel">
+        <button class="btn-map-action btn-cancel" @onclick="CancelAsync">Cancelar</button>
+        <button class="btn-map-action btn-confirm" @onclick="ConfirmAsync">Confirmar Dirección</button>
+    </div>
+</div>
+
+@code {
+    [Parameter][SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery] public double Lat { get; set; }
+    [Parameter][SupplyParameterFromQuery] public double Lon { get; set; }
+
+    private DotNetObjectReference<SelectAddressMapPage>? _dotNetRef;
+    private bool _initialized;
+    private bool _isResolvingAddress;
+    private string _resolvedAddress = string.Empty;
+    private double _currentLat;
+    private double _currentLon;
+
+    private const string MapId = "fullscreen-map";
+
+    protected override void OnInitialized()
+    {
+        if (Lat == 0) Lat = 14.6349;
+        if (Lon == 0) Lon = -90.5069;
+        _currentLat = Lat;
+        _currentLon = Lon;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialized) return;
+
+        await Task.Delay(300);
+
+        var cfg = await ShippingAddressApi.GetMapsConfigAsync();
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.SubscriptionKey))
+        {
+            Console.WriteLine("[SelectAddressMapPage] No se pudo cargar configuración de mapas.");
+            return;
+        }
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        await JS.InvokeVoidAsync(
+            "DeliveryMap.init",
+            MapId,
+            Lat,
+            Lon,
+            cfg.SubscriptionKey,
+            _dotNetRef);
+
+        _initialized = true;
+    }
+
+    [JSInvokable]
+    public async Task OnMapMoved(double lat, double lon)
+    {
+        _currentLat = lat;
+        _currentLon = lon;
+        await ResolveAddressAsync(lat, lon);
+    }
+
+    private async Task ResolveAddressAsync(double lat, double lon)
+    {
+        _isResolvingAddress = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var result = await ShippingAddressApi.GetReverseGeocodeAsync(lat, lon);
+            if (result?.Resolved == true && !string.IsNullOrWhiteSpace(result.Address))
+            {
+                _resolvedAddress = result.Address!;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SelectAddressMapPage] ReverseGeocode error: {ex.Message}");
+        }
+        finally
+        {
+            _isResolvingAddress = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        // Si aún no tenemos dirección, forzar resolución una última vez
+        if (string.IsNullOrWhiteSpace(_resolvedAddress))
+        {
+            await ResolveAddressAsync(_currentLat, _currentLon);
+        }
+
+        var returnUrl = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+        var encodedAddress = Uri.EscapeDataString(_resolvedAddress ?? string.Empty);
+
+        var url = $"{returnUrl}?selectedLat={_currentLat:F6}&selectedLon={_currentLon:F6}&selectedAddress={encodedAddress}";
+        Navigation.NavigateTo(url);
+    }
+
+    private void CancelAsync()
+    {
+        var returnUrl = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+        Navigation.NavigateTo(returnUrl);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("DeliveryMap.destroy", MapId); } catch { }
+        _dotNetRef?.Dispose();
+    }
+}

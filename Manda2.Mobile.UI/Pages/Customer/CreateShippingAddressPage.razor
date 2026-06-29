@@ -7,195 +7,249 @@
 @inject ISessionService Session
 @inject NavigationManager Nav
 
-<div style="height:250px;width:100%">
-    <DeliveryMapComponent Latitude="_request.Latitude"
-                          Longitude="_request.Longitude"
-                          OnLocationChanged="UpdateCoords" />
-</div>
+<style>
+    .create-address-container {
+        background-color: #f8f9fa;
+        min-height: 100vh;
+        padding-bottom: 40px;
+    }
 
-<div class="create-address-page">
-    <div class="page-header">
-        <button class="btn-back" @onclick="GoBack">←</button>
-        <h2>Nueva dirección</h2>
+    .map-header-section {
+        position: relative;
+        height: 220px;
+        width: 100%;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .btn-expand-map {
+        position: absolute;
+        bottom: 15px;
+        right: 15px;
+        background: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .form-card {
+        margin: -20px 15px 0 15px;
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        position: relative;
+        z-index: 20;
+        box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
+    }
+
+    .alias-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .alias-btn {
+        border: 1px solid #e5e7eb;
+        background: white;
+        padding: 10px 5px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 0.75rem;
+        transition: all 0.2s;
+    }
+
+        .alias-btn.active {
+            border-color: #e11d48;
+            background: #fff1f2;
+            color: #e11d48;
+        }
+
+    .alias-icon {
+        font-size: 1.2rem;
+        margin-bottom: 4px;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.9rem;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .form-input-custom {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        margin-bottom: 15px;
+        font-size: 0.95rem;
+    }
+
+    .btn-save-main {
+        background: #e11d48;
+        color: white;
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 15px;
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-top: 20px;
+        box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+    }
+</style>
+
+<div class="create-address-container">
+    <div class="map-header-section">
+        <DeliveryMapComponent Latitude="_request.Latitude"
+                              Longitude="_request.Longitude"
+                              OnLocationChanged="OnMapLocationChanged"
+                              OnAddressResolved="OnAddressResolved" />
+
+        <button class="btn-expand-map" @onclick="OpenFullscreenMap">
+            ⛶ Pantalla Completa
+        </button>
     </div>
 
-    <div class="form-container">
-        <div class="form-group">
-            <label>Ciudad / zona</label>
-            <select @bind="_request.City" class="form-select">
-                @foreach (var country in _countries)
-                {
-                    <option value="@country">@country</option>
-                }
-            </select>
-        </div>
+    <div class="form-card">
+        <h4 class="mb-3">Detalles de entrega</h4>
 
-        <div class="form-group">
-            <label>Alias de la dirección</label>
-            <div class="alias-options">
+        <div class="mb-3">
+            <span class="form-label">¿Qué nombre le ponemos?</span>
+            <div class="alias-grid">
                 @foreach (var alias in _aliasOptions)
                 {
-                    <button type="button"
-                            class="alias-btn @(_request.Alias == alias ? "active" : "")"
+                    <button type="button" class="alias-btn @(_request.Alias == alias ? "active" : "")"
                             @onclick="() => _request.Alias = alias">
-                        @GetAliasIcon(alias) @alias
+                        <span class="alias-icon">@GetAliasIcon(alias)</span>
+                        @alias
                     </button>
                 }
             </div>
         </div>
 
-        <div class="form-group">
-            <label>Dirección <span class="required">*</span></label>
-            <input type="text"
-                   class="form-input"
-                   placeholder="Ej: Colonia Los Robles, Calle Principal"
-                   @bind="_request.AddressLine1" />
+        <div>
+            <label class="form-label">Dirección exacta</label>
+            <input type="text" class="form-input-custom" @bind="_request.AddressLine1"
+                   placeholder="Calle, Avenida, Número de casa..." />
+
+            <label class="form-label">Apto / Oficina / Piso</label>
+            <input type="text" class="form-input-custom" @bind="_request.ApartmentNumber"
+                   placeholder="Ej: Apto 302" />
+
+            <label class="form-label">Punto de referencia</label>
+            <input type="text" class="form-input-custom" @bind="_request.AddressLine2"
+                   placeholder="Ej: Frente a la pulpería El Éxito" />
+
+            <label class="form-label">Instrucciones al repartidor</label>
+            <textarea class="form-input-custom" rows="2" @bind="_request.DeliveryNotes"
+                      placeholder="Ej: Tocar fuerte el portón negro"></textarea>
         </div>
 
-        <div class="form-group">
-            <label>No. Apartamento / Casa (opcional)</label>
-            <input type="text"
-                   class="form-input"
-                   placeholder="Ej: Apto 4B, Casa 12"
-                   @bind="_request.ApartmentNumber" />
+        <div class="d-flex align-items-center mb-3">
+            <input type="checkbox" id="chkDefault" class="me-2" @bind="_request.IsDefault" />
+            <label for="chkDefault" style="font-size: 0.9rem;">Dirección favorita</label>
         </div>
-
-        <div class="form-group">
-            <label>Referencia (opcional)</label>
-            <input type="text"
-                   class="form-input"
-                   placeholder="Ej: Frente al parque central"
-                   @bind="_request.AddressLine2" />
-        </div>
-
-        <div class="form-group">
-            <label>Instrucciones para el repartidor (opcional)</label>
-            <textarea class="form-textarea"
-                      rows="2"
-                      placeholder="Ej: Tocar el timbre 2 veces, portón azul"
-                      @bind="_request.DeliveryNotes"></textarea>
-        </div>
-
-        <div class="form-group">
-            <label>Teléfono de contacto (opcional)</label>
-            <div class="phone-row">
-                <select class="form-select phone-code" @bind="_request.PhoneCountryCode">
-                    <option value="+502">🇬🇹 +502</option>
-                    <option value="+505">🇳🇮 +505</option>
-                    <option value="+503">🇸🇻 +503</option>
-                    <option value="+504">🇭🇳 +504</option>
-                    <option value="+506">🇨🇷 +506</option>
-                    <option value="+507">🇵🇦 +507</option>
-                    <option value="+52">🇲🇽 +52</option>
-                    <option value="+1">🇺🇸 +1</option>
-                </select>
-
-                <input type="tel"
-                       class="form-input phone-number"
-                       placeholder="Número de teléfono"
-                       @bind="_request.ContactPhone" />
-            </div>
-        </div>
-
-        <div class="form-group checkbox-group">
-            <label class="checkbox-label">
-                <input type="checkbox" @bind="_request.IsDefault" />
-                Establecer como dirección principal
-            </label>
-        </div>
-
 
         @if (!string.IsNullOrEmpty(_error))
         {
-            <p class="error-msg">@_error</p>
+            <div class="alert alert-danger py-2">@_error</div>
         }
 
-        <button class="btn-save" @onclick="SaveAddress" disabled="@_saving">
-            @(_saving ? "Guardando..." : "Guardar dirección")
+        <button class="btn-save-main" @onclick="SaveAddress" disabled="@_saving">
+            @(_saving ? "Procesando..." : "Confirmar Ubicación")
         </button>
     </div>
 </div>
 
-@code
-{
-    [Parameter, SupplyParameterFromQuery]
-    public string? ReturnUrl { get; set; }
+@code {
+    [Parameter][SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    // Parámetros que regresan del mapa Fullscreen
+    [Parameter][SupplyParameterFromQuery] public double? SelectedLat { get; set; }
+    [Parameter][SupplyParameterFromQuery] public double? SelectedLon { get; set; }
+    [Parameter][SupplyParameterFromQuery] public string? SelectedAddress { get; set; }
 
     private CreateShippingAddressRequest _request = new()
     {
         Alias = "Casa",
-        City = "Nicaragua",
-        PhoneCountryCode = "+505",
-        IsDefault = false,
-        Latitude = 13.093765924724813,
-        Longitude = -86.0006766303026,
-        AddressLine1 = string.Empty
+        City = "Guatemala", // Default desde contexto
+        PhoneCountryCode = "+502",
+        Latitude = 14.6349,
+        Longitude = -90.5069
     };
 
     private bool _saving;
     private string _error = string.Empty;
-
     private readonly List<string> _aliasOptions = new() { "Casa", "Trabajo", "Gym", "Otro" };
 
-    private readonly List<string> _countries = new()
+    protected override void OnParametersSet()
     {
-        "Guatemala", "Nicaragua", "El Salvador", "Honduras", "Costa Rica", "Panamá", "México"
-    };
+        // Si regresamos del mapa fullscreen, actualizamos el request
+        if (SelectedLat.HasValue && SelectedLon.HasValue)
+        {
+            _request.Latitude = SelectedLat.Value;
+            _request.Longitude = SelectedLon.Value;
+            if (!string.IsNullOrEmpty(SelectedAddress))
+                _request.AddressLine1 = SelectedAddress;
+        }
+    }
 
-    /// <summary>
-    /// Recibe desde el componente de mapa la posición seleccionada.
-    /// </summary>
-    private Task UpdateCoords((double Latitude, double Longitude) coords)
+    private void OnMapLocationChanged((double Lat, double Lon) coords)
     {
-        _request.Latitude = coords.Latitude;
-        _request.Longitude = coords.Longitude;
-        return InvokeAsync(StateHasChanged);
+        _request.Latitude = coords.Lat;
+        _request.Longitude = coords.Lon;
+    }
+
+    private void OnAddressResolved(string address)
+    {
+        // Auto-completar dirección si el usuario no ha escrito nada aún
+        if (string.IsNullOrWhiteSpace(_request.AddressLine1))
+        {
+            _request.AddressLine1 = address;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenFullscreenMap()
+    {
+        var encodedReturn = Uri.EscapeDataString(Nav.Uri);
+        Nav.NavigateTo($"/select-address?ReturnUrl={encodedReturn}&Lat={_request.Latitude}&Lon={_request.Longitude}");
     }
 
     private async Task SaveAddress()
     {
-        _error = string.Empty;
-
         if (string.IsNullOrWhiteSpace(_request.AddressLine1))
         {
-            _error = "La dirección es obligatoria.";
-            return;
-        }
-
-        if (_request.Latitude == 0 && _request.Longitude == 0)
-        {
-            _error = "Por favor ajusta el pin en el mapa.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_request.City))
-        {
-            _error = "La ciudad es obligatoria.";
+            _error = "Dinos dónde entregamos (Dirección)";
             return;
         }
 
         _saving = true;
+        _error = string.Empty;
 
         try
         {
             var newId = await AddressService.CreateShippingAddressAsync(_request);
-
             Session.SelectedShippingAddressId = newId;
-            Session.SelectedAddressText = $"{_request.Alias} - {_request.AddressLine1}, {_request.City}";
-
             Nav.NavigateTo(ReturnUrl ?? "/customer/select-address");
         }
         catch (Exception ex)
         {
-            _error = $"No se pudo guardar la dirección: {ex.Message}";
+            _error = "Error al guardar: " + ex.Message;
         }
-        finally
-        {
-            _saving = false;
-        }
+        finally { _saving = false; }
     }
-
-    private void GoBack() => Nav.NavigateTo(ReturnUrl ?? "/customer/select-address");
 
     private static string GetAliasIcon(string alias) => alias.ToLower() switch
     {

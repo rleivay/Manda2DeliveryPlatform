@@ -60,7 +60,7 @@ namespace Manda2.API.Controllers
             [FromServices] IApplicationDbContext db,
             CancellationToken ct)
         {
-            // Construye base URL dinámica: http://192.168.40.54:5068
+            // Construye base URL dinámica: http://192.168.100.67:5068
             var request = httpContextAccessor.HttpContext?.Request;
             var baseUrl = request != null
                 ? $"{request.Scheme}://{request.Host}"
@@ -139,7 +139,7 @@ namespace Manda2.API.Controllers
             [FromServices] IHttpContextAccessor httpContextAccessor,
             CancellationToken ct)
         {
-            // Construye base URL dinámica: http://192.168.40.54:5068
+            // Construye base URL dinámica: http://192.168.100.67:5068
             var request = httpContextAccessor.HttpContext?.Request;
             var baseUrl = request != null
                 ? $"{request.Scheme}://{request.Host}"

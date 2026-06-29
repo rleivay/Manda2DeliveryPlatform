@@ -1,72 +1,135 @@
-﻿@inject IJSRuntime JS
+﻿@using Manda2.Mobile.Services.ShippingAddress
+@inject IJSRuntime JS
+@inject IShippingAddressApiService ShippingAddressApi
 @implements IAsyncDisposable
 
-<div style="width:100%; height:300px; border:1px solid #ccc; border-radius:12px;">
-    <div id="@MapId" style="width:100%; height:100%;"></div>
+<div style="position:relative; width:100%;">
+    <button class="btn-gps-location" @onclick="CenterOnDeviceLocationAsync" type="button" title="Usar mi ubicación actual">
+        📍 Usar mi ubicación
+    </button>
+
+    <div id="@MapId" style="width:100%; height:300px; border-radius:12px; border:1px solid #ccc;"></div>
 </div>
+
+@if (_isResolvingAddress)
+{
+    <div class="address-resolved-panel mt-2">
+        <em>🔍 Detectando dirección...</em>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_resolvedAddress))
+{
+    <div class="address-resolved-panel mt-2">
+        <strong>📍 Dirección:</strong> @_resolvedAddress
+    </div>
+}
 
 @code {
     [Parameter] public string MapId { get; set; } = "delivery-map";
     [Parameter] public double Latitude { get; set; } = 14.6349;
     [Parameter] public double Longitude { get; set; } = -90.5069;
+    [Parameter] public EventCallback<(double Lat, double Lon)> OnLocationChanged { get; set; }
+    [Parameter] public EventCallback<string> OnAddressResolved { get; set; }
 
     private DotNetObjectReference<DeliveryMapComponent>? _dotNetRef;
     private bool _initialized;
+    private bool _isResolvingAddress;
+    private string _resolvedAddress = string.Empty;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _initialized) return;
 
-        try
+        // MAUI Blazor Hybrid: esperar layout del WebView antes de inyectar el mapa
+        await Task.Delay(300);
+
+        if (Latitude == 0 || Longitude == 0)
         {
-            if (Latitude == 0 || Longitude == 0)
-            {
-                Latitude = 14.6349;
-                Longitude = -90.5069;
-            }
-
-            _dotNetRef = DotNetObjectReference.Create(this);
-
-            await JS.InvokeVoidAsync(
-                "DeliveryMap.init",
-                MapId,
-                Latitude,
-                Longitude,
-                "7PZOy9bQitGrSPIX1f0IKmXSIIeny2zO8n6r70dz3TJ2dTcJVyKaJQQJ99CFACrJL3JAmTUoAAAgAZMP1VZk",
-                _dotNetRef
-            );
-
-            _initialized = true;
+            Latitude = 14.6349;
+            Longitude = -90.5069;
         }
-        catch (Exception ex)
+
+        var cfg = await ShippingAddressApi.GetMapsConfigAsync();
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.SubscriptionKey))
         {
-            Console.WriteLine($"[DeliveryMapComponent] Error: {ex.Message}");
+            Console.WriteLine("[DeliveryMapComponent] No se pudo obtener configuración de mapas.");
+            return;
         }
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        await JS.InvokeVoidAsync(
+            "DeliveryMap.init",
+            MapId,
+            Latitude,
+            Longitude,
+            cfg.SubscriptionKey,
+            _dotNetRef);
+
+        _initialized = true;
     }
 
+    /// <summary>
+    /// Obtiene ubicación GPS del dispositivo, centra el mapa, mueve el pin y resuelve dirección.
+    /// </summary>
+    public async Task CenterOnDeviceLocationAsync()
+    {
+        var location = await JS.InvokeAsync<DeviceLocationResult?>("DeliveryMap.tryGetDeviceLocation");
+        if (location is null)
+        {
+            Console.WriteLine("[DeliveryMapComponent] No se pudo obtener ubicación del dispositivo.");
+            return;
+        }
+
+        await JS.InvokeVoidAsync("DeliveryMap.setCenter", MapId, location.Latitude, location.Longitude);
+        await OnLocationChanged.InvokeAsync((location.Latitude, location.Longitude));
+        await ResolveAddressFromBackendAsync(location.Latitude, location.Longitude);
+    }
+
+    /// <summary>
+    /// Invocado desde JS cuando el usuario mueve el pin haciendo clic en el mapa.
+    /// </summary>
     [JSInvokable]
     public async Task OnMapMoved(double lat, double lon)
     {
+        await OnLocationChanged.InvokeAsync((lat, lon));
+        await ResolveAddressFromBackendAsync(lat, lon);
+    }
+
+    private async Task ResolveAddressFromBackendAsync(double lat, double lon)
+    {
+        _isResolvingAddress = true;
+        await InvokeAsync(StateHasChanged);
+
         try
         {
-            Console.WriteLine($"[DeliveryMapComponent] Pin movido a: {lat}, {lon}");
+            var result = await ShippingAddressApi.GetReverseGeocodeAsync(lat, lon);
+            if (result?.Resolved == true && !string.IsNullOrWhiteSpace(result.Address))
+            {
+                _resolvedAddress = result.Address!;
+                await OnAddressResolved.InvokeAsync(_resolvedAddress);
+            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DeliveryMapComponent] Error en OnMapMoved: {ex.Message}");
+            Console.WriteLine($"[DeliveryMapComponent] ReverseGeocode error: {ex.Message}");
+        }
+        finally
+        {
+            _isResolvingAddress = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        try
-        {
-            await JS.InvokeVoidAsync("DeliveryMap.destroy", MapId);
-            _dotNetRef?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[DeliveryMapComponent] Dispose error: {ex.Message}");
-        }
+        try { await JS.InvokeVoidAsync("DeliveryMap.destroy", MapId); } catch { }
+        _dotNetRef?.Dispose();
+    }
+
+    private sealed class DeviceLocationResult
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
     }
 }
